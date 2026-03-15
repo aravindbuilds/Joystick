@@ -35,10 +35,17 @@ if (-not $IpAddress) {
     $IpAddress = Get-LanIPv4
 }
 
-$python = Get-Command python -ErrorAction SilentlyContinue
-if (-not $python) {
-    Write-Host "Python not found in PATH. Install Python 3.10+ and retry." -ForegroundColor Red
-    exit 1
+$venvPythonPath = Join-Path (Split-Path -Parent $MyInvocation.MyCommand.Path) ".venv\Scripts\python.exe"
+if (Test-Path $venvPythonPath) {
+    $pythonSource = $venvPythonPath
+}
+else {
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if (-not $python) {
+        Write-Host "Python not found in PATH. Install Python 3.10+ and retry." -ForegroundColor Red
+        exit 1
+    }
+    $pythonSource = $python.Source
 }
 
 $openssl = Get-Command openssl -ErrorAction SilentlyContinue
@@ -69,16 +76,16 @@ try {
     else {
         Write-Host "OpenSSL not found. Switching to Python certificate generator..." -ForegroundColor Yellow
 
-        & $python.Source -c "import cryptography" 2>$null
+        & $pythonSource -c "import cryptography" 2>$null
         if ($LASTEXITCODE -ne 0) {
             Write-Host "Installing cryptography package for certificate generation..." -ForegroundColor Yellow
-            & $python.Source -m pip install cryptography
+            & $pythonSource -m pip install cryptography
             if ($LASTEXITCODE -ne 0) {
                 throw "Failed to install cryptography package automatically."
             }
         }
 
-        & $python.Source .\generate-certs.py --common-name $CommonName --days $Days --ip-address $IpAddress --out-dir .
+        & $pythonSource .\generate-certs.py --common-name $CommonName --days $Days --ip-address $IpAddress --out-dir .
         if ($LASTEXITCODE -ne 0) {
             throw "Python certificate generator failed."
         }

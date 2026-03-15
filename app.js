@@ -49,6 +49,7 @@ const state = {
   wsProtocol: window.location.protocol === "https:" ? "wss" : "ws",
   serverSuggestedHost: null,
   autoConnectAttempted: false,
+  sensitivity: 1,
   lastSent: {
     steering: 999,
     gas: 999,
@@ -91,6 +92,8 @@ const el = {
   btnNorth: document.getElementById("btnNorth"),
   btnLb: document.getElementById("btnLb"),
   btnRb: document.getElementById("btnRb"),
+  sensitivitySlider: document.getElementById("sensitivitySlider"),
+  sensitivityValue: document.getElementById("sensitivityValue"),
 };
 
 const PROFILE_LABELS = {
@@ -158,6 +161,15 @@ function updateInvertButton() {
   el.invertBtn.classList.toggle("active", state.invertSteering);
 }
 
+function updateSensitivityUi() {
+  if (!el.sensitivitySlider || !el.sensitivityValue) {
+    return;
+  }
+  const percent = Math.round(state.sensitivity * 100);
+  el.sensitivityValue.textContent = `${percent}%`;
+  el.sensitivitySlider.value = String(percent);
+}
+
 function activeDriveConfig() {
   return DRIVE_PROFILES[state.driveProfile] || DRIVE_PROFILES.balanced;
 }
@@ -199,11 +211,18 @@ function loadSettings() {
   const savedIp = localStorage.getItem("wheel_host_ip");
   const savedOutput = localStorage.getItem("wheel_output_mode");
   const savedInvert = localStorage.getItem("wheel_invert_steering");
+  const savedSensitivity = localStorage.getItem("wheel_sensitivity");
   if (savedOutput === "keyboard" || savedOutput === "gamepad") {
     state.outputMode = savedOutput;
   }
   if (savedInvert === "true") {
     state.invertSteering = true;
+  }
+  if (savedSensitivity) {
+    const numeric = Number(savedSensitivity);
+    if (Number.isFinite(numeric) && numeric > 0) {
+      state.sensitivity = clamp(numeric, 0.5, 1.4);
+    }
   }
   if (savedIp) {
     el.ipInput.value = savedIp;
@@ -220,6 +239,7 @@ function saveSettings() {
   localStorage.setItem("wheel_host_ip", el.ipInput.value.trim());
   localStorage.setItem("wheel_output_mode", state.outputMode);
   localStorage.setItem("wheel_invert_steering", String(state.invertSteering));
+  localStorage.setItem("wheel_sensitivity", String(state.sensitivity));
 }
 
 function currentHost() {
@@ -451,7 +471,8 @@ function handleOrientation(event) {
   state.lastTiltRaw = tiltRaw;
   const cfg = activeDriveConfig();
   const centeredTilt = tiltRaw - state.neutralTilt;
-  const normalized = clamp(centeredTilt / cfg.maxTiltDeg, -1, 1);
+  const effectiveMaxTilt = cfg.maxTiltDeg / state.sensitivity;
+  const normalized = clamp(centeredTilt / effectiveMaxTilt, -1, 1);
   const dz = applyDeadzone(normalized, cfg.deadzone);
   state.rawSteering = applyExpo(dz, cfg.steerExpo);
 }
@@ -665,6 +686,17 @@ function setupEvents() {
     }
   });
 
+  if (el.sensitivitySlider) {
+    el.sensitivitySlider.addEventListener("input", (event) => {
+      const value = Number(event.target.value);
+      if (Number.isFinite(value)) {
+        state.sensitivity = clamp(value / 100, 0.5, 1.4);
+        updateSensitivityUi();
+        saveSettings();
+      }
+    });
+  }
+
   attachPedal(el.gasZone, "gas");
   attachPedal(el.brakeZone, "brake");
   attachActionButton(el.btnSouth, "south");
@@ -691,6 +723,7 @@ async function boot() {
   updateInvertButton();
   updateOutputButtons();
   updateDriveButtons();
+  updateSensitivityUi();
   updateStatus("Disconnected", false);
   updateSensorUi();
 
