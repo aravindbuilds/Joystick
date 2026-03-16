@@ -23,7 +23,8 @@ HTTP_PORT = 8000
 WS_PORT = 5005
 HTTPS_PORT = 8443
 WSS_PORT = 5443
-WATCHDOG_TIMEOUT_S = 1.0
+WATCHDOG_TIMEOUT_S = 10.0
+MAX_GAMEPADS = 4
 
 BUTTON_SOUTH = 1
 BUTTON_EAST = 2
@@ -31,6 +32,16 @@ BUTTON_WEST = 4
 BUTTON_NORTH = 8
 BUTTON_LB = 16
 BUTTON_RB = 32
+BUTTON_LT = 64
+BUTTON_RT = 128
+BUTTON_BACK = 256
+BUTTON_START = 512
+BUTTON_LS = 1024
+BUTTON_RS = 2048
+BUTTON_DPAD_UP = 4096
+BUTTON_DPAD_DOWN = 8192
+BUTTON_DPAD_LEFT = 16384
+BUTTON_DPAD_RIGHT = 32768
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 INDEX_FILE = PROJECT_ROOT / "index.html"
@@ -73,6 +84,9 @@ class NullGamepad:
 	def left_joystick_float(self, x_value_float: float, y_value_float: float) -> None:
 		_ = (x_value_float, y_value_float)
 
+	def right_joystick_float(self, x_value_float: float, y_value_float: float) -> None:
+		_ = (x_value_float, y_value_float)
+
 	def left_trigger_float(self, value_float: float) -> None:
 		_ = value_float
 
@@ -93,7 +107,8 @@ class NullGamepad:
 
 
 class GamepadBridge:
-	def __init__(self) -> None:
+	def __init__(self, slot: int) -> None:
+		self.slot = slot
 		self.profile = "xbox"
 		self.gamepad = self._create_gamepad(self.profile)
 		self.logical_pressed = {
@@ -103,25 +118,36 @@ class GamepadBridge:
 			"north": False,
 			"lb": False,
 			"rb": False,
+			"lt": False,
+			"rt": False,
+			"back": False,
+			"start": False,
+			"ls": False,
+			"rs": False,
+			"dpad_up": False,
+			"dpad_down": False,
+			"dpad_left": False,
+			"dpad_right": False,
 		}
+		self.trigger_overrides = {"lt": False, "rt": False}
 
 	def _create_gamepad(self, profile: str):
 		if vg is None:
-			logging.warning("vgamepad not found. Running in no-op mode.")
+			logging.warning("vgamepad not found. Running in no-op mode for slot %s.", self.slot)
 			return NullGamepad(profile)
 
 		if profile in ("ps", "ps5"):
-			logging.info("Using VDS4Gamepad profile")
+			logging.info("Using VDS4Gamepad profile for slot %s", self.slot)
 			return vg.VDS4Gamepad()
 
-		logging.info("Using VX360Gamepad profile")
+		logging.info("Using VX360Gamepad profile for slot %s", self.slot)
 		return vg.VX360Gamepad()
 
 	def switch_profile(self, profile: str) -> None:
 		if profile.lower().startswith("ps"):
 			normalized = "ps5"
-		elif profile.lower().startswith("ase"):
-			normalized = "assetto"
+		elif profile.lower().startswith("rac") or profile.lower().startswith("ase"):
+			normalized = "racing"
 		else:
 			normalized = "xbox"
 		if normalized == self.profile:
@@ -134,16 +160,32 @@ class GamepadBridge:
 
 		self.profile = normalized
 		self.gamepad = self._create_gamepad(self.profile)
-		logging.info("Controller profile switched to %s", self.profile)
+		logging.info("Controller profile switched to %s (slot %s)", self.profile, self.slot)
 
-	def apply(self, steering: float, gas: float, brake: float) -> None:
-		steering = clamp(steering, -1.0, 1.0)
-		gas = clamp(gas, 0.0, 1.0)
-		brake = clamp(brake, 0.0, 1.0)
+	def apply(
+		self,
+		left_x: float,
+		left_y: float,
+		right_x: float,
+		right_y: float,
+		left_trigger: float,
+		right_trigger: float,
+	) -> None:
+		left_x = clamp(left_x, -1.0, 1.0)
+		left_y = clamp(left_y, -1.0, 1.0)
+		right_x = clamp(right_x, -1.0, 1.0)
+		right_y = clamp(right_y, -1.0, 1.0)
+		left_trigger = clamp(left_trigger, 0.0, 1.0)
+		right_trigger = clamp(right_trigger, 0.0, 1.0)
+		if self.trigger_overrides["rt"]:
+			right_trigger = max(right_trigger, 1.0)
+		if self.trigger_overrides["lt"]:
+			left_trigger = max(left_trigger, 1.0)
 
-		self.gamepad.left_joystick_float(x_value_float=steering, y_value_float=0.0)
-		self.gamepad.right_trigger_float(value_float=gas)
-		self.gamepad.left_trigger_float(value_float=brake)
+		self.gamepad.left_joystick_float(x_value_float=left_x, y_value_float=left_y)
+		self.gamepad.right_joystick_float(x_value_float=right_x, y_value_float=right_y)
+		self.gamepad.right_trigger_float(value_float=right_trigger)
+		self.gamepad.left_trigger_float(value_float=left_trigger)
 		self.gamepad.update()
 
 	def _resolve_button_enum(self, logical_button: str):
@@ -159,6 +201,14 @@ class GamepadBridge:
 				"north": ["DS4_BUTTON_TRIANGLE"],
 				"lb": ["DS4_BUTTON_SHOULDER_LEFT"],
 				"rb": ["DS4_BUTTON_SHOULDER_RIGHT"],
+				"back": ["DS4_BUTTON_SHARE"],
+				"start": ["DS4_BUTTON_OPTIONS"],
+				"ls": ["DS4_BUTTON_THUMB_LEFT"],
+				"rs": ["DS4_BUTTON_THUMB_RIGHT"],
+				"dpad_up": ["DS4_BUTTON_DPAD_NORTH"],
+				"dpad_down": ["DS4_BUTTON_DPAD_SOUTH"],
+				"dpad_left": ["DS4_BUTTON_DPAD_WEST"],
+				"dpad_right": ["DS4_BUTTON_DPAD_EAST"],
 			}
 		else:
 			enum_obj = getattr(vg, "XUSB_BUTTON", None)
@@ -169,6 +219,14 @@ class GamepadBridge:
 				"north": ["XUSB_GAMEPAD_Y"],
 				"lb": ["XUSB_GAMEPAD_LEFT_SHOULDER"],
 				"rb": ["XUSB_GAMEPAD_RIGHT_SHOULDER"],
+				"back": ["XUSB_GAMEPAD_BACK"],
+				"start": ["XUSB_GAMEPAD_START"],
+				"ls": ["XUSB_GAMEPAD_LEFT_THUMB"],
+				"rs": ["XUSB_GAMEPAD_RIGHT_THUMB"],
+				"dpad_up": ["XUSB_GAMEPAD_DPAD_UP"],
+				"dpad_down": ["XUSB_GAMEPAD_DPAD_DOWN"],
+				"dpad_left": ["XUSB_GAMEPAD_DPAD_LEFT"],
+				"dpad_right": ["XUSB_GAMEPAD_DPAD_RIGHT"],
 			}
 
 		if enum_obj is None:
@@ -182,6 +240,11 @@ class GamepadBridge:
 
 	def _set_logical_button(self, logical_button: str, should_press: bool) -> None:
 		if self.logical_pressed.get(logical_button) == should_press:
+			return
+
+		if logical_button in ("lt", "rt"):
+			self.trigger_overrides[logical_button] = should_press
+			self.logical_pressed[logical_button] = should_press
 			return
 
 		button = self._resolve_button_enum(logical_button)
@@ -202,10 +265,23 @@ class GamepadBridge:
 		self._set_logical_button("north", (mask & BUTTON_NORTH) != 0)
 		self._set_logical_button("lb", (mask & BUTTON_LB) != 0)
 		self._set_logical_button("rb", (mask & BUTTON_RB) != 0)
+		self._set_logical_button("lt", (mask & BUTTON_LT) != 0)
+		self._set_logical_button("rt", (mask & BUTTON_RT) != 0)
+		self._set_logical_button("back", (mask & BUTTON_BACK) != 0)
+		self._set_logical_button("start", (mask & BUTTON_START) != 0)
+		self._set_logical_button("ls", (mask & BUTTON_LS) != 0)
+		self._set_logical_button("rs", (mask & BUTTON_RS) != 0)
+		self._set_logical_button("dpad_up", (mask & BUTTON_DPAD_UP) != 0)
+		self._set_logical_button("dpad_down", (mask & BUTTON_DPAD_DOWN) != 0)
+		self._set_logical_button("dpad_left", (mask & BUTTON_DPAD_LEFT) != 0)
+		self._set_logical_button("dpad_right", (mask & BUTTON_DPAD_RIGHT) != 0)
 		self.gamepad.update()
 
 	def reset(self) -> None:
+		self.trigger_overrides["lt"] = False
+		self.trigger_overrides["rt"] = False
 		self.gamepad.left_joystick_float(x_value_float=0.0, y_value_float=0.0)
+		self.gamepad.right_joystick_float(x_value_float=0.0, y_value_float=0.0)
 		self.gamepad.right_trigger_float(value_float=0.0)
 		self.gamepad.left_trigger_float(value_float=0.0)
 		self.apply_buttons(0)
@@ -240,15 +316,23 @@ class KeyboardBridge:
 		self.user32.keybd_event(vk, 0, flags, 0)
 		self.pressed[name] = should_press
 
-	def apply(self, steering: float, gas: float, brake: float) -> None:
-		steering = clamp(steering, -1.0, 1.0)
-		gas = clamp(gas, 0.0, 1.0)
-		brake = clamp(brake, 0.0, 1.0)
+	def apply(
+		self,
+		left_x: float,
+		left_y: float,
+		right_x: float,
+		right_y: float,
+		left_trigger: float,
+		right_trigger: float,
+	) -> None:
+		left_x = clamp(left_x, -1.0, 1.0)
+		left_trigger = clamp(left_trigger, 0.0, 1.0)
+		right_trigger = clamp(right_trigger, 0.0, 1.0)
 
-		left = steering < -self.steer_threshold
-		right = steering > self.steer_threshold
-		up = gas > self.pedal_threshold
-		down = brake > self.pedal_threshold
+		left = left_x < -self.steer_threshold
+		right = left_x > self.steer_threshold
+		up = right_trigger > self.pedal_threshold
+		down = left_trigger > self.pedal_threshold
 
 		self._set_key("left", self.VK_LEFT, left)
 		self._set_key("right", self.VK_RIGHT, right)
@@ -263,9 +347,9 @@ class KeyboardBridge:
 
 
 class ControlBridge:
-	def __init__(self) -> None:
+	def __init__(self, slot: int) -> None:
 		self.output_mode = "gamepad"
-		self.gamepad = GamepadBridge()
+		self.gamepad = GamepadBridge(slot)
 		self.keyboard = KeyboardBridge()
 
 	def switch_profile(self, profile: str) -> None:
@@ -280,13 +364,21 @@ class ControlBridge:
 		self.output_mode = normalized
 		logging.info("Output mode switched to %s", self.output_mode)
 
-	def apply(self, steering: float, gas: float, brake: float) -> None:
+	def apply(
+		self,
+		left_x: float,
+		left_y: float,
+		right_x: float,
+		right_y: float,
+		left_trigger: float,
+		right_trigger: float,
+	) -> None:
 		if self.output_mode == "keyboard":
-			self.keyboard.apply(steering, gas, brake)
+			self.keyboard.apply(left_x, left_y, right_x, right_y, left_trigger, right_trigger)
 			self.gamepad.reset()
 			return
 
-		self.gamepad.apply(steering, gas, brake)
+		self.gamepad.apply(left_x, left_y, right_x, right_y, left_trigger, right_trigger)
 		self.keyboard.reset()
 
 	def apply_buttons(self, button_mask: int) -> None:
@@ -300,9 +392,46 @@ class ControlBridge:
 
 
 @dataclass
-class SharedState:
+class ClientSession:
+	slot: int
 	bridge: ControlBridge
 	last_input_ts: float = 0.0
+
+
+class BridgePool:
+	def __init__(self, max_slots: int = MAX_GAMEPADS) -> None:
+		self.max_slots = max_slots
+		self._available_slots = list(range(1, max_slots + 1))
+		self._sessions: dict[int, ClientSession] = {}
+
+	def acquire(self) -> Optional[ClientSession]:
+		if not self._available_slots:
+			return None
+
+		slot = self._available_slots.pop(0)
+		session = ClientSession(slot=slot, bridge=ControlBridge(slot))
+		self._sessions[slot] = session
+		return session
+
+	def release(self, slot: int) -> None:
+		session = self._sessions.pop(slot, None)
+		if session is None:
+			return
+		try:
+			session.bridge.reset()
+		except Exception:
+			logging.exception("Failed resetting controller slot %s", slot)
+		if slot not in self._available_slots:
+			self._available_slots.append(slot)
+			self._available_slots.sort()
+
+	def active_sessions(self) -> list[ClientSession]:
+		return list(self._sessions.values())
+
+
+@dataclass
+class SharedState:
+	pool: BridgePool
 	active_clients: int = 0
 
 
@@ -382,8 +511,25 @@ async def handle_http_client(reader: asyncio.StreamReader, writer: asyncio.Strea
 		await writer.wait_closed()
 
 
-def parse_control_packet(payload: str) -> Optional[tuple[float, float, float]]:
-	"""Parse steering,gas,brake CSV payload."""
+def parse_axis_packet(payload: str) -> Optional[tuple[float, float, float, float, float, float]]:
+	"""Parse LX,LY,RX,RY,L2,R2 packet payload."""
+	parts = payload.split(",")
+	if len(parts) != 6:
+		return None
+	try:
+		left_x = float(parts[0])
+		left_y = float(parts[1])
+		right_x = float(parts[2])
+		right_y = float(parts[3])
+		left_trigger = float(parts[4])
+		right_trigger = float(parts[5])
+	except ValueError:
+		return None
+	return left_x, left_y, right_x, right_y, left_trigger, right_trigger
+
+
+def parse_legacy_control_packet(payload: str) -> Optional[tuple[float, float, float, float, float, float]]:
+	"""Parse legacy steering,gas,brake CSV payload and map to modern axes/triggers."""
 	parts = payload.split(",")
 	if len(parts) != 3:
 		return None
@@ -393,12 +539,19 @@ def parse_control_packet(payload: str) -> Optional[tuple[float, float, float]]:
 		brake = float(parts[2])
 	except ValueError:
 		return None
-	return steering, gas, brake
+	return steering, 0.0, 0.0, 0.0, clamp(brake, 0.0, 1.0), clamp(gas, 0.0, 1.0)
 
 
 async def ws_handler(websocket: Any, state: SharedState) -> None:
+	session = state.pool.acquire()
+	if session is None:
+		logging.warning("Rejecting client: all %s virtual controller slots are in use", MAX_GAMEPADS)
+		await websocket.close(code=1013, reason="No free controller slots")
+		return
+
 	state.active_clients += 1
-	logging.info("Phone connected (%s active)", state.active_clients)
+	logging.info("Phone connected on slot %s (%s active)", session.slot, state.active_clients)
+	await websocket.send(f"S:{session.slot}")
 
 	try:
 		async for message in websocket:
@@ -409,12 +562,12 @@ async def ws_handler(websocket: Any, state: SharedState) -> None:
 
 			if text.startswith("P:"):
 				profile = text[2:].strip().lower()
-				state.bridge.switch_profile(profile)
+				session.bridge.switch_profile(profile)
 				continue
 
 			if text.startswith("M:"):
 				mode = text[2:].strip().lower()
-				state.bridge.switch_output_mode(mode)
+				session.bridge.switch_output_mode(mode)
 				continue
 
 			if text.startswith("B:"):
@@ -422,23 +575,28 @@ async def ws_handler(websocket: Any, state: SharedState) -> None:
 					mask = int(text[2:].strip())
 				except ValueError:
 					continue
-				state.bridge.apply_buttons(mask)
+				session.bridge.apply_buttons(mask)
+				session.last_input_ts = time.perf_counter()
 				continue
 
-			parsed = parse_control_packet(text)
+			if text.startswith("A:"):
+				parsed = parse_axis_packet(text[2:].strip())
+			else:
+				parsed = parse_legacy_control_packet(text)
 			if parsed is None:
 				continue
 
-			steering, gas, brake = parsed
-			state.bridge.apply(steering, gas, brake)
-			state.last_input_ts = time.perf_counter()
+			left_x, left_y, right_x, right_y, left_trigger, right_trigger = parsed
+			session.bridge.apply(left_x, left_y, right_x, right_y, left_trigger, right_trigger)
+			session.last_input_ts = time.perf_counter()
 	except websockets.ConnectionClosed:
 		pass
 	except Exception:
 		logging.exception("WebSocket handler error")
 	finally:
 		state.active_clients = max(0, state.active_clients - 1)
-		logging.info("Phone disconnected (%s active)", state.active_clients)
+		state.pool.release(session.slot)
+		logging.info("Phone disconnected from slot %s (%s active)", session.slot, state.active_clients)
 
 
 async def ws_entrypoint(websocket: Any, state: SharedState, path: Optional[str] = None) -> None:
@@ -450,11 +608,12 @@ async def watchdog_loop(state: SharedState) -> None:
 	while True:
 		await asyncio.sleep(0.1)
 		now = time.perf_counter()
-		if state.last_input_ts == 0:
-			continue
-		if (now - state.last_input_ts) > WATCHDOG_TIMEOUT_S:
-			state.bridge.reset()
-			state.last_input_ts = 0.0
+		for session in state.pool.active_sessions():
+			if session.last_input_ts == 0:
+				continue
+			if (now - session.last_input_ts) > WATCHDOG_TIMEOUT_S:
+				session.bridge.reset()
+				session.last_input_ts = 0.0
 
 
 async def main() -> None:
@@ -463,7 +622,7 @@ async def main() -> None:
 	if not INDEX_FILE.exists():
 		raise FileNotFoundError("index.html not found beside server.py")
 
-	state = SharedState(bridge=ControlBridge())
+	state = SharedState(pool=BridgePool())
 	tls_context = build_tls_context()
 	handle_http_client.secure_available = tls_context is not None  # type: ignore[attr-defined]
 
@@ -531,7 +690,8 @@ async def main() -> None:
 			http_instance.close()
 		for http_instance in http_servers:
 			await http_instance.wait_closed()
-		state.bridge.reset()
+		for session in state.pool.active_sessions():
+			session.bridge.reset()
 
 
 if __name__ == "__main__":

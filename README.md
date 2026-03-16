@@ -1,31 +1,28 @@
-# Joystick - Phone Motion Racing Wheel for PC
+# Joystick - Phone Joystick Pad for PC
 
-Use your smartphone browser as a steering wheel + pedals and forward inputs to a virtual controller on your PC.
+Use your smartphone browser as a dual-stick joystick pad with face buttons and send inputs to a virtual controller on your PC.
 
 ## Features
 
-- Motion steering from phone tilt (DeviceOrientation gamma)
-- Landscape-aware gyro steering (works in portrait and landscape)
-- Steering normalization to -1.0 to 1.0 with clamping
-- Low-pass filtering and center deadzone for smooth control
-- Assetto Corsa drive profile (tighter steering + pedal curves)
-- Touch pedals:
-  - Left zone = brake
-  - Right zone = gas
+- Left virtual stick for steering (X axis)
+- Right virtual stick for throttle and brake (Y axis)
+- Gamepad-style face buttons and shoulder buttons
+- Full Xbox-style action set (face, shoulders, triggers, start/back, stick clicks, d-pad)
+- Assetto Corsa drive profile curves
 - Real-time WebSocket input streaming
 - Output modes: Virtual Gamepad or Keyboard mapper
 - Automatic host detection from page URL and server config endpoint
 - Xbox and PlayStation virtual controller profiles
+- Multi-joystick sessions (up to 4 simultaneous phone clients)
 - Watchdog safety reset on connection/input timeout
-- Steering calibration button
-- Mobile-first neon racing dashboard UI
+- Mobile-first joystick dashboard UI
 
 ## Project Structure
 
 - [server.py](server.py): Python host app (HTTP + WebSocket + vgamepad bridge)
 - [index.html](index.html): Mobile UI layout
 - [style.css](style.css): Dashboard styling
-- [app.js](app.js): Motion, touch, networking, and UI logic
+- [app.js](app.js): Virtual stick, button, networking, and UI logic
 
 ## Requirements
 
@@ -69,21 +66,19 @@ Example:
 1. Start [server.py](server.py) on your PC.
 2. Open the HTTP URL on your phone.
 3. Host IP auto-fills and app auto-attempts connect.
-4. Tap Enable Motion and allow motion sensor permission.
-5. If needed, edit IP manually and tap Connect.
-6. Hold phone like a steering wheel and tilt left/right.
-7. Use pedal zones:
-   - Left side touch/drag up for brake
-   - Right side touch/drag up for gas
-8. Pick profile: Xbox or PlayStation.
+4. If needed, edit IP manually and tap Connect.
+5. Use left stick for steering.
+6. Use right stick vertically:
+  - Up for gas
+  - Down for brake
+7. Pick profile: Xbox, PlayStation, or Assetto.
   - Xbox: A/B/X/Y + LB/RB layout
   - PS5: Cross/Circle/Square/Triangle + L1/R1 layout
-  - Assetto: Shift/handbrake/assist quick actions while keeping gyro steering
-9. Pick output mode:
+  - Assetto: Shift/handbrake/assist quick actions
+8. Pick output mode:
   - Gamepad: virtual controller via vgamepad
   - Keyboard: sends arrow keys (Left/Right/Up/Down) for games like older NFS titles
-10. Pick driving profile: Balanced or Assetto Corsa.
-11. If center feels off, tap Calibrate Steering.
+9. Pick driving profile: Balanced or Assetto Corsa.
 
 ## Hotspot / Wi-Fi Direct Mode
 
@@ -97,9 +92,9 @@ Use this when phone connects directly to your PC hotspot.
 
 Common hotspot IP on Windows is `192.168.137.1`.
 
-## HTTPS / WSS for iPhone Motion Access
+## HTTPS / WSS Access
 
-iOS Safari often denies motion sensors on insecure pages. Use HTTPS mode.
+Use HTTPS mode when you want encrypted local-network traffic.
 
 1. Create local certificate files in project root:
   - `cert.pem`
@@ -107,7 +102,7 @@ iOS Safari often denies motion sensors on insecure pages. Use HTTPS mode.
 2. Restart [server.py](server.py).
 3. Open `https://PC_IP:8443` on your phone.
 4. Trust the certificate warning for local testing.
-5. Tap Enable Motion, then Connect.
+5. Connect from the app as usual.
 
 The app automatically switches to secure WebSocket (`wss://`) when opened over HTTPS.
 
@@ -145,7 +140,13 @@ Keyboard mapper mode:
 Controller action buttons in app:
 
 - South / East / West / North face buttons
-- LB and RB shoulder buttons
+- LB1 / RB1 shoulder buttons
+- LB2 / RB2 trigger buttons
+- Back and Start
+- Left-stick click and Right-stick click
+- D-pad Up / Down / Left / Right
+
+Each connected phone gets its own virtual controller slot automatically (up to 4 active at the same time).
 
 ## Data Packet Format
 
@@ -161,14 +162,13 @@ Profile switch packet:
 
 ## Performance Notes
 
-- Uses requestAnimationFrame loop on client for smooth updates
 - Sends only changed values to reduce network traffic
-- Applies low-pass smoothing and deadzone correction
+- Applies deadzone and curve shaping for smoother stick feel
 - Intended for local Wi-Fi use (low-latency LAN)
 
 ## Safety Behavior
 
-If no input is received for about 1 second, the server watchdog resets controller state:
+If no input is received for about 10 seconds, the server watchdog resets controller state:
 
 - Steering centered
 - Gas released
@@ -199,16 +199,11 @@ python -m pip install -r requirements.txt
 - Use PC LAN IP, not `localhost`
 - In hotspot mode, try `192.168.137.1`
 
-### Motion permission denied (iPhone/Safari)
+### Sticks or buttons feel unresponsive
 
-- Open the HTTPS URL: `https://PC_IP:8443`
-- Ensure Safari setting is ON: Motion & Orientation Access
-- Tap Enable Motion only after page fully loads
-
-### Steering is noisy or drifts
-
-- Recalibrate while holding neutral position
-- Keep phone away from magnetic interference
+- Ensure you are touching inside the stick pads or button circles
+- Reconnect from the app if packets seem delayed
+- Keep phone and PC on the same Wi-Fi band when possible
 
 ## Security Note
 

@@ -1,744 +1,680 @@
-const WS_PORT = 5005;
-const MAX_TILT_DEG = 35;
-const STEERING_DEADZONE = 0.04;
-const STEERING_ALPHA = 0.16;
-const SEND_EPSILON = 0.002;
-const AUTO_CONNECT_DELAY_MS = 220;
-const BUTTON_BITS = {
-  south: 1,
-  east: 2,
-  west: 4,
-  north: 8,
-  lb: 16,
-  rb: 32,
+// State Variables
+let ws;
+let wsPort = 5005; // Fallback, will be fetched from server
+let wsProtocol = 'ws';
+let isConnected = false;
+let isEditMode = false;
+
+// Hardware & Controls Settings
+let activeKeys = new Set();
+let activeProfile = "default";
+let activeTheme = "xbox";
+let uiScale = 1.0;
+let joystickSens = 1.0;
+let useGyro = false;
+let gyroOffset = { gamma: 0, beta: 0 };
+let currentTouches = {}; 
+
+// Elements
+const connectBtn = document.getElementById('connect-btn');
+const editBtn = document.getElementById('edit-layout-btn');
+const settingsToggleBtn = document.getElementById('settings-toggle-btn');
+const settingsBar = document.getElementById('settings-bar');
+
+// UI Scalable Container Elements (Wrappers we drag around)
+const scalableElements = [
+    document.getElementById('shoulder-left'),
+    document.getElementById('shoulder-right'),
+    document.getElementById('dpad-grid'),
+    document.getElementById('action-grid'),
+    document.getElementById('base-left'),
+    document.getElementById('base-right'),
+    document.getElementById('middle-buttons')
+];
+
+// Profile Manager
+const profileSel = document.getElementById('profile-sel');
+const sizeSlider = document.getElementById('size-slider');
+const sensSlider = document.getElementById('sens-slider');
+
+// Gyro Manager
+const gyroToggle = document.getElementById('gyro-toggle');
+const gyroIndicator = document.getElementById('gyro-indicator');
+const calibrateBtn = document.getElementById('calibrate-btn');
+
+const btnMap = {
+    'A': 'BTN_SOUTH', 'B': 'BTN_EAST', 'X': 'BTN_WEST', 'Y': 'BTN_NORTH',
+    'Up': 'ABS_HAT0Y:-1', 'Down': 'ABS_HAT0Y:1', 'Left': 'ABS_HAT0X:-1', 'Right': 'ABS_HAT0X:1',
+    'L1': 'BTN_TL', 'R1': 'BTN_TR', 'L2': 'ABS_Z:255', 'R2': 'ABS_RZ:255',
+    'L3': 'BTN_THUMBL', 'R3': 'BTN_THUMBR',
+    'Share': 'BTN_SELECT', 'Menu': 'BTN_START', 'Home': 'BTN_MODE'
 };
 
-const DRIVE_PROFILES = {
-  balanced: {
-    maxTiltDeg: 35,
-    deadzone: 0.04,
-    steerAlpha: 0.16,
-    steerExpo: 1.2,
-    gasExpo: 1.0,
-    brakeExpo: 1.0,
-  },
-  assetto: {
-    maxTiltDeg: 28,
-    deadzone: 0.025,
-    steerAlpha: 0.24,
-    steerExpo: 1.45,
-    gasExpo: 1.15,
-    brakeExpo: 1.35,
-  },
-};
 
-const state = {
-  ws: null,
-  connected: false,
-  requestedProfile: "xbox",
-  outputMode: "gamepad",
-  driveProfile: "balanced",
-  neutralTilt: 0,
-  lastTiltRaw: 0,
-  rawSteering: 0,
-  smoothedSteering: 0,
-  gas: 0,
-  brake: 0,
-  orientationAttached: false,
-  wsPort: WS_PORT,
-  wsProtocol: window.location.protocol === "https:" ? "wss" : "ws",
-  serverSuggestedHost: null,
-  autoConnectAttempted: false,
-  sensitivity: 1,
-  lastSent: {
-    steering: 999,
-    gas: 999,
-    brake: 999,
-    buttonMask: 999,
-  },
-  buttonMask: 0,
-  invertSteering: false,
-  sensorsEnabled: false,
-};
+// --- INITIALIZATION ---
+function setupZoomPrevention() {
+    // Prevent pinch zoom and double-tap zoom on iOS
+    document.addEventListener('gesturestart', function(e) { e.preventDefault(); });
+    document.addEventListener('gesturechange', function(e) { e.preventDefault(); });
+    document.addEventListener('gestureend', function(e) { e.preventDefault(); });
 
-const el = {
-  ipInput: document.getElementById("ipInput"),
-  motionBtn: document.getElementById("motionBtn"),
-  connectBtn: document.getElementById("connectBtn"),
-  invertBtn: document.getElementById("invertBtn"),
-  statusDot: document.getElementById("statusDot"),
-  statusText: document.getElementById("statusText"),
-  sensorText: document.getElementById("sensorText"),
-  wheel: document.getElementById("wheel"),
-  steeringValue: document.getElementById("steeringValue"),
-  profileXbox: document.getElementById("profileXbox"),
-  profilePs: document.getElementById("profilePs"),
-  profileAssetto: document.getElementById("profileAssetto"),
-  outputGamepad: document.getElementById("outputGamepad"),
-  outputKeyboard: document.getElementById("outputKeyboard"),
-  driveNormal: document.getElementById("driveNormal"),
-  driveAssetto: document.getElementById("driveAssetto"),
-  calibrateBtn: document.getElementById("calibrateBtn"),
-  gasZone: document.getElementById("gasZone"),
-  brakeZone: document.getElementById("brakeZone"),
-  gasMeter: document.getElementById("gasMeter"),
-  brakeMeter: document.getElementById("brakeMeter"),
-  gasValue: document.getElementById("gasValue"),
-  brakeValue: document.getElementById("brakeValue"),
-  actionHint: document.getElementById("actionHint"),
-  btnSouth: document.getElementById("btnSouth"),
-  btnEast: document.getElementById("btnEast"),
-  btnWest: document.getElementById("btnWest"),
-  btnNorth: document.getElementById("btnNorth"),
-  btnLb: document.getElementById("btnLb"),
-  btnRb: document.getElementById("btnRb"),
-  sensitivitySlider: document.getElementById("sensitivitySlider"),
-  sensitivityValue: document.getElementById("sensitivityValue"),
-};
-
-const PROFILE_LABELS = {
-  xbox: {
-    hint: "Xbox layout",
-    south: "A",
-    east: "B",
-    west: "X",
-    north: "Y",
-    lb: "LB",
-    rb: "RB",
-  },
-  ps5: {
-    hint: "PS5 layout",
-    south: "Cross",
-    east: "Circle",
-    west: "Square",
-    north: "Triangle",
-    lb: "L1",
-    rb: "R1",
-  },
-  assetto: {
-    hint: "Assetto layout",
-    south: "Shift+",
-    east: "Handbrake",
-    west: "Shift-",
-    north: "LookBack",
-    lb: "TC-",
-    rb: "TC+",
-  },
-};
-
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
+    let lastTouchEnd = 0;
+    document.addEventListener('touchend', function (event) {
+        if (!isEditMode) {
+            const now = (new Date()).getTime();
+            if (now - lastTouchEnd <= 300) {
+                event.preventDefault();
+            }
+            lastTouchEnd = now;
+        }
+    }, { passive: false });
 }
 
-function applyDeadzone(value, deadzone) {
-  if (Math.abs(value) <= deadzone) {
-    return 0;
-  }
-  const sign = Math.sign(value);
-  const scaled = (Math.abs(value) - deadzone) / (1 - deadzone);
-  return sign * clamp(scaled, 0, 1);
-}
-
-function applyExpo(value, exponent) {
-  const sign = Math.sign(value);
-  return sign * Math.pow(Math.abs(value), exponent);
-}
-
-function updateSensorUi() {
-  if (state.sensorsEnabled) {
-    el.sensorText.textContent = "Motion: Enabled";
-    el.motionBtn.textContent = "Motion Enabled";
-    el.motionBtn.classList.add("active");
-    return;
-  }
-  el.sensorText.textContent = "Motion: Tap Enable Motion";
-  el.motionBtn.textContent = "Enable Motion";
-  el.motionBtn.classList.remove("active");
-}
-
-function updateInvertButton() {
-  el.invertBtn.textContent = `Invert L/R: ${state.invertSteering ? "On" : "Off"}`;
-  el.invertBtn.classList.toggle("active", state.invertSteering);
-}
-
-function updateSensitivityUi() {
-  if (!el.sensitivitySlider || !el.sensitivityValue) {
-    return;
-  }
-  const percent = Math.round(state.sensitivity * 100);
-  el.sensitivityValue.textContent = `${percent}%`;
-  el.sensitivitySlider.value = String(percent);
-}
-
-function activeDriveConfig() {
-  return DRIVE_PROFILES[state.driveProfile] || DRIVE_PROFILES.balanced;
-}
-
-function updateDriveButtons() {
-  const isAssetto = state.driveProfile === "assetto";
-  el.driveAssetto.classList.toggle("active", isAssetto);
-  el.driveNormal.classList.toggle("active", !isAssetto);
-}
-
-function updateStatus(text, isConnected) {
-  state.connected = isConnected;
-  el.statusText.textContent = text;
-  el.statusDot.classList.toggle("connected", isConnected);
-  el.connectBtn.textContent = isConnected ? "Disconnect" : "Connect";
-}
-
-function updateProfileButtons() {
-  el.profileXbox.classList.toggle("active", state.requestedProfile === "xbox");
-  el.profilePs.classList.toggle("active", state.requestedProfile === "ps5");
-  el.profileAssetto.classList.toggle("active", state.requestedProfile === "assetto");
-  const labels = PROFILE_LABELS[state.requestedProfile] || PROFILE_LABELS.xbox;
-  el.actionHint.textContent = labels.hint;
-  el.btnSouth.textContent = labels.south;
-  el.btnEast.textContent = labels.east;
-  el.btnWest.textContent = labels.west;
-  el.btnNorth.textContent = labels.north;
-  el.btnLb.textContent = labels.lb;
-  el.btnRb.textContent = labels.rb;
-}
-
-function updateOutputButtons() {
-  const keyboard = state.outputMode === "keyboard";
-  el.outputKeyboard.classList.toggle("active", keyboard);
-  el.outputGamepad.classList.toggle("active", !keyboard);
-}
-
-function loadSettings() {
-  const savedIp = localStorage.getItem("wheel_host_ip");
-  const savedOutput = localStorage.getItem("wheel_output_mode");
-  const savedInvert = localStorage.getItem("wheel_invert_steering");
-  const savedSensitivity = localStorage.getItem("wheel_sensitivity");
-  if (savedOutput === "keyboard" || savedOutput === "gamepad") {
-    state.outputMode = savedOutput;
-  }
-  if (savedInvert === "true") {
-    state.invertSteering = true;
-  }
-  if (savedSensitivity) {
-    const numeric = Number(savedSensitivity);
-    if (Number.isFinite(numeric) && numeric > 0) {
-      state.sensitivity = clamp(numeric, 0.5, 1.4);
-    }
-  }
-  if (savedIp) {
-    el.ipInput.value = savedIp;
-    return;
-  }
-
-  // If the page is opened from the PC host, use that hostname automatically.
-  if (window.location.hostname && window.location.hostname !== "localhost") {
-    el.ipInput.value = window.location.hostname;
-  }
-}
-
-function saveSettings() {
-  localStorage.setItem("wheel_host_ip", el.ipInput.value.trim());
-  localStorage.setItem("wheel_output_mode", state.outputMode);
-  localStorage.setItem("wheel_invert_steering", String(state.invertSteering));
-  localStorage.setItem("wheel_sensitivity", String(state.sensitivity));
-}
-
-function currentHost() {
-  const raw = el.ipInput.value.trim();
-  if (raw) {
-    return raw;
-  }
-  if (state.serverSuggestedHost) {
-    return state.serverSuggestedHost;
-  }
-  if (window.location.hostname && window.location.hostname !== "localhost") {
-    return window.location.hostname;
-  }
-  return null;
-}
-
-function closeSocket() {
-  if (state.ws) {
-    state.ws.onclose = null;
-    state.ws.close();
-    state.ws = null;
-  }
-  updateStatus("Disconnected", false);
-}
-
-function connectSocket() {
-  if (state.connected) {
-    closeSocket();
-    return;
-  }
-
-  const host = currentHost();
-  if (!host) {
-    updateStatus("Enter PC IP first", false);
-    return;
-  }
-
-  if (!el.ipInput.value.trim()) {
-    el.ipInput.value = host;
-  }
-
-  saveSettings();
-  updateStatus("Connecting...", false);
-
-  const ws = new WebSocket(`${state.wsProtocol}://${host}:${state.wsPort}`);
-
-  ws.onopen = () => {
-    state.ws = ws;
-    updateStatus("Connected", true);
-    sendProfile();
-    sendOutputMode();
-  };
-
-  ws.onclose = () => {
-    state.ws = null;
-    updateStatus("Disconnected", false);
-  };
-
-  ws.onerror = () => {
-    updateStatus("Connection error", false);
-  };
-}
-
-async function loadServerConfig() {
-  try {
-    const response = await fetch("/api/config", { cache: "no-store" });
-    if (!response.ok) {
-      return;
-    }
-
-    const config = await response.json();
-    if (typeof config.ws_port === "number" && Number.isFinite(config.ws_port)) {
-      state.wsPort = config.ws_port;
-    }
-
-    if (typeof config.ws_protocol === "string") {
-      const normalized = config.ws_protocol.toLowerCase();
-      if (normalized === "ws" || normalized === "wss") {
-        state.wsProtocol = normalized;
-      }
-    }
-
-    if (typeof config.default_output_mode === "string") {
-      const normalizedMode = config.default_output_mode.toLowerCase();
-      if ((normalizedMode === "gamepad" || normalizedMode === "keyboard") && !localStorage.getItem("wheel_output_mode")) {
-        state.outputMode = normalizedMode;
-      }
-    }
-
-    if (typeof config.suggested_host === "string" && config.suggested_host.trim()) {
-      state.serverSuggestedHost = config.suggested_host.trim();
-      if (!el.ipInput.value.trim()) {
-        el.ipInput.value = state.serverSuggestedHost;
-      }
-    }
-  } catch {
-    // Keep defaults if config endpoint is not available.
-  }
-}
-
-function maybeAutoConnect() {
-  if (state.autoConnectAttempted || state.connected) {
-    return;
-  }
-
-  const host = currentHost();
-  if (!host || !state.sensorsEnabled) {
-    return;
-  }
-
-  state.autoConnectAttempted = true;
-  setTimeout(() => {
-    if (!state.connected) {
-      connectSocket();
-    }
-  }, AUTO_CONNECT_DELAY_MS);
-}
-
-function sendProfile() {
-  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
-    return;
-  }
-  state.ws.send(`P:${state.requestedProfile}`);
-}
-
-function sendButtons() {
-  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
-    return;
-  }
-  state.ws.send(`B:${state.buttonMask}`);
-  state.lastSent.buttonMask = state.buttonMask;
-}
-
-function sendOutputMode() {
-  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
-    return;
-  }
-  state.ws.send(`M:${state.outputMode}`);
-}
-
-function sendControlPacket(steering, gas, brake) {
-  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
-    return;
-  }
-
-  const packet = `${steering.toFixed(4)},${gas.toFixed(4)},${brake.toFixed(4)}`;
-  state.ws.send(packet);
-  state.lastSent.steering = steering;
-  state.lastSent.gas = gas;
-  state.lastSent.brake = brake;
-}
-
-function maybeSendControlPacket() {
-  const s = state.smoothedSteering;
-  const g = state.gas;
-  const b = state.brake;
-
-  const changed =
-    Math.abs(s - state.lastSent.steering) > SEND_EPSILON ||
-    Math.abs(g - state.lastSent.gas) > SEND_EPSILON ||
-    Math.abs(b - state.lastSent.brake) > SEND_EPSILON;
-
-  const buttonChanged = state.buttonMask !== state.lastSent.buttonMask;
-
-  if (changed) {
-    sendControlPacket(s, g, b);
-  }
-
-  if (buttonChanged) {
-    sendButtons();
-  }
-}
-
-function updateWheelUi() {
-  const degrees = state.smoothedSteering * 95;
-  el.wheel.style.transform = `rotate(${degrees.toFixed(2)}deg)`;
-  el.steeringValue.textContent = `Steering: ${state.smoothedSteering.toFixed(2)}`;
-
-  const gasPct = Math.round(state.gas * 100);
-  const brakePct = Math.round(state.brake * 100);
-  el.gasMeter.style.height = `${gasPct}%`;
-  el.brakeMeter.style.height = `${brakePct}%`;
-  el.gasValue.textContent = `${gasPct}%`;
-  el.brakeValue.textContent = `${brakePct}%`;
-}
-
-function readTiltFromOrientation(event) {
-  const gamma = typeof event.gamma === "number" ? event.gamma : 0;
-  const beta = typeof event.beta === "number" ? event.beta : 0;
-
-  let angle = 0;
-  if (screen.orientation && typeof screen.orientation.angle === "number") {
-    angle = screen.orientation.angle;
-  } else if (typeof window.orientation === "number") {
-    angle = window.orientation;
-  }
-
-  const normalizedAngle = ((angle % 360) + 360) % 360;
-  let tilt = gamma;
-
-  if (normalizedAngle === 90 || normalizedAngle === 270) {
-    // In landscape, gamma is usually the closest to intuitive left-right wheel tilt.
-    tilt = gamma;
-
-    // Some devices report weak gamma in landscape, so use beta as fallback.
-    if (Math.abs(gamma) < 1.0 && Math.abs(beta) > Math.abs(gamma) * 1.5) {
-      tilt = beta;
-    }
-
-    // Landscape-secondary needs sign flip to keep steering direction consistent.
-    if (normalizedAngle === 270) {
-      tilt = -tilt;
-    }
-  } else if (normalizedAngle === 180) {
-    tilt = -gamma;
-  }
-
-  return state.invertSteering ? -tilt : tilt;
-}
-
-function handleOrientation(event) {
-  if (typeof event.gamma !== "number" && typeof event.beta !== "number") {
-    return;
-  }
-
-  state.sensorsEnabled = true;
-  updateSensorUi();
-  const tiltRaw = readTiltFromOrientation(event);
-  state.lastTiltRaw = tiltRaw;
-  const cfg = activeDriveConfig();
-  const centeredTilt = tiltRaw - state.neutralTilt;
-  const effectiveMaxTilt = cfg.maxTiltDeg / state.sensitivity;
-  const normalized = clamp(centeredTilt / effectiveMaxTilt, -1, 1);
-  const dz = applyDeadzone(normalized, cfg.deadzone);
-  state.rawSteering = applyExpo(dz, cfg.steerExpo);
-}
-
-function attachOrientationListener() {
-  if (state.orientationAttached) {
-    return;
-  }
-  window.addEventListener("deviceorientation", handleOrientation, { passive: true });
-  state.orientationAttached = true;
-}
-
-async function ensureOrientationPermissionIfNeeded() {
-  const iOSPermission =
-    typeof DeviceOrientationEvent !== "undefined" &&
-    typeof DeviceOrientationEvent.requestPermission === "function";
-
-  if (!iOSPermission) {
-    attachOrientationListener();
-    updateStatus("Motion ready", state.connected);
-    return;
-  }
-
-  try {
-    const result = await DeviceOrientationEvent.requestPermission();
-    if (result === "granted") {
-      attachOrientationListener();
-      updateStatus("Motion ready", state.connected);
-      maybeAutoConnect();
-    } else {
-      updateStatus("Motion permission denied", state.connected);
-    }
-  } catch {
-    updateStatus("Sensor permission failed", state.connected);
-  }
-}
-
-function valueFromTouch(zoneElement, touchEvent) {
-  const rect = zoneElement.getBoundingClientRect();
-  const y = clamp(touchEvent.clientY - rect.top, 0, rect.height);
-  const cfg = activeDriveConfig();
-  const percent = 1 - y / rect.height;
-  const curved = Math.pow(clamp(percent, 0, 1), keyFromZone(zoneElement) === "brake" ? cfg.brakeExpo : cfg.gasExpo);
-  return clamp(curved, 0, 1);
-}
-
-function keyFromZone(zoneElement) {
-  return zoneElement === el.brakeZone ? "brake" : "gas";
-}
-
-function setButtonPressed(name, pressed, buttonElement) {
-  const bit = BUTTON_BITS[name];
-  if (!bit) {
-    return;
-  }
-
-  if (pressed) {
-    state.buttonMask |= bit;
-    buttonElement.classList.add("pressed");
-  } else {
-    state.buttonMask &= ~bit;
-    buttonElement.classList.remove("pressed");
-  }
-}
-
-function attachActionButton(element, logicalName) {
-  const start = (event) => {
-    event.preventDefault();
-    setButtonPressed(logicalName, true, element);
-  };
-  const end = (event) => {
-    event.preventDefault();
-    setButtonPressed(logicalName, false, element);
-  };
-
-  element.addEventListener("pointerdown", start, { passive: false });
-  element.addEventListener("pointerup", end, { passive: false });
-  element.addEventListener("pointercancel", end, { passive: false });
-  element.addEventListener("pointerleave", end, { passive: false });
-}
-
-function attachPedal(zoneElement, keyName) {
-  const activeTouches = new Map();
-
-  const updateFromTouches = () => {
-    if (activeTouches.size === 0) {
-      state[keyName] = 0;
-      return;
-    }
-
-    // Use the highest pressure when multiple fingers touch the zone.
-    let max = 0;
-    for (const value of activeTouches.values()) {
-      if (value > max) {
-        max = value;
-      }
-    }
-    state[keyName] = max;
-
-    if (state[keyName] >= 0.9 && navigator.vibrate) {
-      navigator.vibrate(14);
-    }
-  };
-
-  zoneElement.addEventListener("touchstart", (event) => {
-    event.preventDefault();
-    for (const touch of event.changedTouches) {
-      activeTouches.set(touch.identifier, valueFromTouch(zoneElement, touch));
-    }
-    updateFromTouches();
-  }, { passive: false });
-
-  zoneElement.addEventListener("touchmove", (event) => {
-    event.preventDefault();
-    for (const touch of event.changedTouches) {
-      if (activeTouches.has(touch.identifier)) {
-        activeTouches.set(touch.identifier, valueFromTouch(zoneElement, touch));
-      }
-    }
-    updateFromTouches();
-  }, { passive: false });
-
-  const release = (event) => {
-    event.preventDefault();
-    for (const touch of event.changedTouches) {
-      activeTouches.delete(touch.identifier);
-    }
-    updateFromTouches();
-  };
-
-  zoneElement.addEventListener("touchend", release, { passive: false });
-  zoneElement.addEventListener("touchcancel", release, { passive: false });
-}
-
-function animationLoop() {
-  const cfg = activeDriveConfig();
-  state.smoothedSteering += cfg.steerAlpha * (state.rawSteering - state.smoothedSteering);
-  state.smoothedSteering = clamp(state.smoothedSteering, -1, 1);
-
-  updateWheelUi();
-  maybeSendControlPacket();
-
-  requestAnimationFrame(animationLoop);
-}
-
-function setupEvents() {
-  el.motionBtn.addEventListener("click", async () => {
-    await ensureOrientationPermissionIfNeeded();
-  });
-
-  el.connectBtn.addEventListener("click", () => {
-    connectSocket();
-  });
-
-  el.invertBtn.addEventListener("click", () => {
-    state.invertSteering = !state.invertSteering;
-    updateInvertButton();
-    saveSettings();
-  });
-
-  el.profileXbox.addEventListener("click", () => {
-    state.requestedProfile = "xbox";
-    updateProfileButtons();
-    sendProfile();
-  });
-
-  el.profilePs.addEventListener("click", () => {
-    state.requestedProfile = "ps5";
-    updateProfileButtons();
-    sendProfile();
-  });
-
-  el.profileAssetto.addEventListener("click", () => {
-    state.requestedProfile = "assetto";
-    updateProfileButtons();
-    sendProfile();
-  });
-
-  el.outputGamepad.addEventListener("click", () => {
-    state.outputMode = "gamepad";
-    updateOutputButtons();
-    saveSettings();
-    sendOutputMode();
-  });
-
-  el.outputKeyboard.addEventListener("click", () => {
-    state.outputMode = "keyboard";
-    updateOutputButtons();
-    saveSettings();
-    sendOutputMode();
-  });
-
-  el.driveNormal.addEventListener("click", () => {
-    state.driveProfile = "balanced";
-    updateDriveButtons();
-  });
-
-  el.driveAssetto.addEventListener("click", () => {
-    state.driveProfile = "assetto";
-    updateDriveButtons();
-  });
-
-  el.calibrateBtn.addEventListener("click", () => {
-    // Capture current tilt as neutral center.
-    state.neutralTilt = state.lastTiltRaw;
-    state.rawSteering = 0;
-    state.smoothedSteering = 0;
-    updateStatus("Steering calibrated", state.connected);
-    if (navigator.vibrate) {
-      navigator.vibrate([10, 30, 10]);
-    }
-  });
-
-  if (el.sensitivitySlider) {
-    el.sensitivitySlider.addEventListener("input", (event) => {
-      const value = Number(event.target.value);
-      if (Number.isFinite(value)) {
-        state.sensitivity = clamp(value / 100, 0.5, 1.4);
-        updateSensitivityUi();
-        saveSettings();
-      }
+function init() {
+    setupZoomPrevention();
+    loadProfile(activeProfile);
+    setTheme(activeTheme);
+    setupWebSocket();
+    setupControls();
+    setupEditMode();
+    setupGyro();
+
+    sizeSlider.addEventListener('input', (e) => {
+        uiScale = e.target.value;
+        document.documentElement.style.setProperty('--btn-scale', uiScale);
+        if(isEditMode) saveProfile();
     });
-  }
 
-  attachPedal(el.gasZone, "gas");
-  attachPedal(el.brakeZone, "brake");
-  attachActionButton(el.btnSouth, "south");
-  attachActionButton(el.btnEast, "east");
-  attachActionButton(el.btnWest, "west");
-  attachActionButton(el.btnNorth, "north");
-  attachActionButton(el.btnLb, "lb");
-  attachActionButton(el.btnRb, "rb");
+    sensSlider.addEventListener('input', (e) => {
+        joystickSens = e.target.value;
+        if(isEditMode) saveProfile();
+    });
 
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) {
-      state.gas = 0;
-      state.brake = 0;
-      state.rawSteering = 0;
-      state.buttonMask = 0;
+    profileSel.addEventListener('change', (e) => {
+        activeProfile = e.target.value;
+        loadProfile(activeProfile);
+    });
+
+    settingsToggleBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if(settingsBar.classList.contains('hidden')) {
+            settingsBar.classList.remove('hidden');
+        } else {
+            settingsBar.classList.add('hidden');
+            if(isEditMode) toggleEditMode(); // Force exit edit mode if settings close
+        }
+    });
+
+    // Close settings bar when clicking outside
+    document.addEventListener('click', (e) => {
+        if (!settingsBar.classList.contains('hidden') && 
+            !settingsBar.contains(e.target) && 
+            !settingsToggleBtn.contains(e.target)) {
+            
+            // Ignore outside clicks if we are currently dragging UI elements in edit mode
+            if (isEditMode) return; 
+
+            settingsBar.classList.add('hidden');
+        }
+    });
+
+    document.addEventListener('touchstart', (e) => {
+        // Because touch events might be used for controls, we check specifically 
+        // to avoid closing if we touch inside settings
+        if (!settingsBar.classList.contains('hidden') && 
+            !settingsBar.contains(e.target) && 
+            !settingsToggleBtn.contains(e.target)) {
+            
+            if (isEditMode) return;
+
+            settingsBar.classList.add('hidden');
+        }
+    }, { passive: true });
+}
+
+
+// --- PROFILES & THEMES ---
+function setTheme(theme) {
+    document.body.classList.remove('theme-ps5');
+    if (theme === 'ps5') {
+        document.body.classList.add('theme-ps5');
+        document.getElementById('btn-a').querySelector('span').innerText = '✕';
+        document.getElementById('btn-b').querySelector('span').innerText = '○';
+        document.getElementById('btn-x').querySelector('span').innerText = '□';
+        document.getElementById('btn-y').querySelector('span').innerText = '△';
+        document.getElementById('home-icon').innerText = 'PS';
+        document.getElementById('home-icon').className = 'font-bold text-xl text-blue-400';
+    } else {
+        document.getElementById('btn-a').querySelector('span').innerText = 'A';
+        document.getElementById('btn-b').querySelector('span').innerText = 'B';
+        document.getElementById('btn-x').querySelector('span').innerText = 'X';
+        document.getElementById('btn-y').querySelector('span').innerText = 'Y';
+        document.getElementById('home-icon').innerText = 'X';
+        document.getElementById('home-icon').className = 'font-bold text-2xl text-emerald-400';
     }
-  });
 }
 
-async function boot() {
-  loadSettings();
-  await loadServerConfig();
-  updateProfileButtons();
-  updateInvertButton();
-  updateOutputButtons();
-  updateDriveButtons();
-  updateSensitivityUi();
-  updateStatus("Disconnected", false);
-  updateSensorUi();
-
-  // On iOS, motion permission requires a user gesture.
-  // We still auto-enable listener on platforms that do not require permission.
-  const iOSPermission =
-    typeof DeviceOrientationEvent !== "undefined" &&
-    typeof DeviceOrientationEvent.requestPermission === "function";
-  if (!iOSPermission) {
-    await ensureOrientationPermissionIfNeeded();
-    maybeAutoConnect();
-  }
-
-  setupEvents();
-  requestAnimationFrame(animationLoop);
+function saveProfile() {
+    const layout = {};
+    scalableElements.forEach(el => {
+        if(el) {
+            layout[el.id] = { left: el.style.left, top: el.style.top, right: el.style.right, bottom: el.style.bottom };
+        }
+    });
+    
+    const profileData = {
+        layout,
+        scale: uiScale,
+        sens: joystickSens,
+        gyro: useGyro
+    };
+    
+    localStorage.setItem(`gamepad_${activeProfile}`, JSON.stringify(profileData));
 }
 
-boot();
+function loadProfile(profileName) {
+    const data = localStorage.getItem(`gamepad_${profileName}`);
+    if (data) {
+        try {
+            const profile = JSON.parse(data);
+            
+            // Apply Layout
+            if(profile.layout) {
+                Object.keys(profile.layout).forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) {
+                        if(profile.layout[id].left) el.style.left = profile.layout[id].left;
+                        if(profile.layout[id].top) el.style.top = profile.layout[id].top;
+                        if(profile.layout[id].right) el.style.right = profile.layout[id].right;
+                        if(profile.layout[id].bottom) el.style.bottom = profile.layout[id].bottom;
+                    }
+                });
+            }
+
+            // Apply Settings
+            if(profile.scale) {
+                uiScale = profile.scale;
+                sizeSlider.value = uiScale;
+                document.documentElement.style.setProperty('--btn-scale', uiScale);
+            }
+            if(profile.sens) {
+                joystickSens = profile.sens;
+                sensSlider.value = joystickSens;
+            }
+            if(profile.gyro !== undefined) {
+                useGyro = profile.gyro;
+                gyroToggle.checked = useGyro;
+                updateGyroUI();
+            }
+        } catch(e) { console.error("Profile load failed", e); }
+    }
+}
+
+
+// --- EDIT MODE (DRAG & DROP) ---
+let draggedEl = null;
+let dragOffset = { x: 0, y: 0 };
+
+function toggleEditMode() {
+    isEditMode = !isEditMode;
+    editBtn.textContent = isEditMode ? "Save Layout" : "Edit Layout";
+    
+    if (isEditMode) {
+        editBtn.classList.replace('text-yellow-400', 'text-white');
+        editBtn.classList.replace('bg-yellow-500/20', 'bg-red-500/80');
+        editBtn.classList.replace('border-yellow-500/50', 'border-red-500');
+        
+        scalableElements.forEach(el => {
+            if(el) {
+                el.classList.add('edit-mode-active');
+            }
+        });
+        
+        // Setup Drag Listeners globally while in edit mode
+        document.addEventListener('touchstart', handleDragStart, {passive: false});
+        document.addEventListener('touchmove', handleDragMove, {passive: false});
+        document.addEventListener('touchend', handleDragEnd);
+        
+        // For Mouse users testing locally
+        document.addEventListener('mousedown', handleDragStart);
+        document.addEventListener('mousemove', handleDragMove);
+        document.addEventListener('mouseup', handleDragEnd);
+
+    } else {
+        editBtn.classList.replace('text-white', 'text-yellow-400');
+        editBtn.classList.replace('bg-red-500/80', 'bg-yellow-500/20');
+        editBtn.classList.replace('border-red-500', 'border-yellow-500/50');
+        
+        scalableElements.forEach(el => {
+            if(el) {
+                el.classList.remove('edit-mode-active');
+            }
+        });
+        
+        document.removeEventListener('touchstart', handleDragStart);
+        document.removeEventListener('touchmove', handleDragMove);
+        document.removeEventListener('touchend', handleDragEnd);
+        document.removeEventListener('mousedown', handleDragStart);
+        document.removeEventListener('mousemove', handleDragMove);
+        document.removeEventListener('mouseup', handleDragEnd);
+        
+        saveProfile();
+    }
+}
+
+function handleDragStart(e) {
+    if (!isEditMode) return;
+    
+    const target = e.target.closest('.scalable-control');
+    if (!target) return;
+    
+    e.preventDefault(); // Prevent scrolling while dragging wrappers
+    draggedEl = target;
+    
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    const rect = draggedEl.getBoundingClientRect();
+    
+    // We calculate offset relative to left/top explicitly
+    dragOffset.x = clientX - rect.left;
+    dragOffset.y = clientY - rect.top;
+    
+    // Clear right/bottom to avoid CSS conflicts when forcing left/top
+    draggedEl.style.right = 'auto';
+    draggedEl.style.bottom = 'auto';
+}
+
+function handleDragMove(e) {
+    if (!isEditMode || !draggedEl) return;
+    e.preventDefault();
+    
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    // Convert to absolute px positioning dynamically
+    const newLeft = clientX - dragOffset.x;
+    const newTop = clientY - dragOffset.y;
+    
+    draggedEl.style.left = `${newLeft}px`;
+    draggedEl.style.top = `${newTop}px`;
+}
+
+function handleDragEnd() {
+    draggedEl = null;
+}
+
+function setupEditMode() {
+    editBtn.addEventListener('click', toggleEditMode);
+}
+
+
+// --- HARDWARE / INPUT HANDLING  ---
+
+function setupControls() {
+    // Buttons setup
+    document.querySelectorAll('[data-btn]').forEach(btn => {
+        btn.addEventListener('touchstart', (e) => {
+            if (isEditMode) return;
+            e.preventDefault(); // crucial to stop context menus / selections
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                currentTouches[e.changedTouches[i].identifier] = btn;
+            }
+            pressButton(btn);
+        }, { passive: false });
+
+        btn.addEventListener('touchend', (e) => {
+            if (isEditMode) return;
+            e.preventDefault();
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                delete currentTouches[e.changedTouches[i].identifier];
+            }
+            releaseButton(btn);
+        }, { passive: false });
+        
+        btn.addEventListener('touchcancel', (e) => releaseButton(btn));
+        
+        // Mouse fallback
+        btn.addEventListener('mousedown', (e) => { if(!isEditMode) pressButton(btn); });
+        btn.addEventListener('mouseup', (e) => { if(!isEditMode) releaseButton(btn); });
+        btn.addEventListener('mouseleave', (e) => { if(!isEditMode) releaseButton(btn); });
+    });
+
+    // Left Stick (Physical)
+    const baseL = document.getElementById('base-left');
+    const stickL = document.getElementById('stick-left');
+    setupJoystick(baseL, stickL, 'ABS_X', 'ABS_Y');
+
+    // Right Stick (Physical - Only active if Gyro is OFF)
+    const baseR = document.getElementById('base-right');
+    const stickR = document.getElementById('stick-right');
+    setupJoystick(baseR, stickR, 'ABS_RX', 'ABS_RY', () => !useGyro);
+}
+
+function hapticPulse() {
+    if (navigator.vibrate) {
+        navigator.vibrate(15);
+    }
+}
+
+function pressButton(el) {
+    if (!el.classList.contains('active')) {
+        el.classList.add('active');
+        const key = el.getAttribute('data-btn');
+        if (key && btnMap[key]) {
+            sendUpdate(btnMap[key]);
+            hapticPulse();
+        }
+    }
+}
+
+function releaseButton(el) {
+    el.classList.remove('active');
+    const key = el.getAttribute('data-btn');
+    if (key && btnMap[key]) {
+        // Special logic for DPAD/Triggers
+        if (btnMap[key].includes(':')) {
+            const axisName = btnMap[key].split(':')[0];
+            // Send 0 to reset axis
+            sendUpdate(`${axisName}:0`);
+        } else {
+            sendUpdate(`!${btnMap[key]}`);
+        }
+    }
+}
+
+function setupJoystick(base, stick, axisX, axisY, conditionCallback = null) {
+    let joystickState = { active: false, id: null };
+    const maxDistance = 70; // Pixel deadzone constraint
+
+    base.addEventListener('touchstart', handleStart, {passive: false});
+    document.addEventListener('touchmove', handleMove, {passive: false});
+    document.addEventListener('touchend', handleEnd);
+    document.addEventListener('touchcancel', handleEnd);
+    
+    // Mouse
+    base.addEventListener('mousedown', handleStart);
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleEnd);
+
+    function handleStart(e) {
+        if (isEditMode) return;
+        if (conditionCallback && conditionCallback() === false) return;
+        
+        // Find if any of the new touches are on this specific base
+        if (e.changedTouches) {
+            let foundTouch = null;
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                const touch = e.changedTouches[i];
+                // Prevent multi-binding the same touch by checking element boundaries loosely
+                // or just relying on the fact that the touchstart fired on *our* base element
+                if (e.target === base || base.contains(e.target)) {
+                    foundTouch = touch;
+                    break;
+                }
+            }
+            if (!foundTouch) return;
+            joystickState.id = foundTouch.identifier;
+        } else {
+            joystickState.id = 'mouse';
+        }
+
+        e.preventDefault();
+        joystickState.active = true;
+        stick.classList.add('stick-active');
+        stick.style.transition = 'none';
+        
+        updateJoystickPosition(e);
+    }
+
+    function handleMove(e) {
+        if (!joystickState.active || isEditMode) return;
+        if (conditionCallback && conditionCallback() === false) return;
+        
+        let clientX, clientY;
+        if (e.touches) {
+            for (let i = 0; i < e.touches.length; i++) {
+                if (e.touches[i].identifier === joystickState.id) {
+                    clientX = e.touches[i].clientX;
+                    clientY = e.touches[i].clientY;
+                    break;
+                }
+            }
+            if(clientX === undefined) return;
+        } else {
+            clientX = e.clientX;
+            clientY = e.clientY;
+        }
+
+        const rect = base.getBoundingClientRect();
+        // Calculate center of base relative to viewport
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+
+        let deltaX = clientX - centerX;
+        let deltaY = clientY - centerY;
+
+        const distance = Math.min(Math.sqrt(deltaX*deltaX + deltaY*deltaY), maxDistance);
+        const angle = Math.atan2(deltaY, deltaX);
+
+        const x = distance * Math.cos(angle);
+        const y = distance * Math.sin(angle);
+
+        stick.style.transform = `translate(${x}px, ${y}px)`;
+
+        // Normalize -1 to 1, apply sensitivity
+        let nx = (x / maxDistance) * joystickSens;
+        let ny = (y / maxDistance) * joystickSens;
+        
+        // Clamp
+        nx = Math.max(-1, Math.min(1, nx));
+        ny = Math.max(-1, Math.min(1, ny));
+
+        // Scale to 16bit integer (-32768 to 32767)
+        const iX = Math.round(nx * 32767);
+        const iY = Math.round(ny * 32767);
+
+        sendUpdate(`${axisX}:${iX}`);
+        sendUpdate(`${axisY}:${iY}`);
+    }
+
+    function handleEnd(e) {
+        if (!joystickState.active) return;
+        
+        if (e.changedTouches) {
+            let found = false;
+            for (let i = 0; i < e.changedTouches.length; i++) {
+                if (e.changedTouches[i].identifier === joystickState.id) {
+                    found = true; break;
+                }
+            }
+            if(!found) return;
+        }
+
+        joystickState.active = false;
+        joystickState.id = null;
+        stick.classList.remove('stick-active');
+        stick.style.transition = 'transform 0.2s cubic-bezier(0.4, 0, 0.2, 1)';
+        stick.style.transform = 'translate(0px, 0px)';
+        
+        sendUpdate(`${axisX}:0`);
+        sendUpdate(`${axisY}:0`);
+    }
+    
+    // Initial Helper
+    function updateJoystickPosition(e) { 
+        // Create a synthetic event that looks like touchmove to reuse logic 
+        let tempEvent = { touches: e.touches || e.changedTouches, clientX: e.clientX, clientY: e.clientY };
+        handleMove(tempEvent); 
+    }
+}
+
+// --- GYROSCOPE (Phone Steering) ---
+function setupGyro() {
+    gyroToggle.addEventListener('change', (e) => {
+        useGyro = e.target.checked;
+        saveProfile();
+        updateGyroUI();
+        
+        if (useGyro && typeof DeviceOrientationEvent !== 'undefined') {
+            if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+                DeviceOrientationEvent.requestPermission()
+                    .then(state => {
+                        if (state === 'granted') {
+                            window.addEventListener('deviceorientation', handleGyro);
+                            calibrateGyro();
+                        } else {
+                            alert("Gyroscope permission denied.");
+                            useGyro = false;
+                            gyroToggle.checked = false;
+                            updateGyroUI();
+                        }
+                    })
+                    .catch(console.error);
+            } else {
+                window.addEventListener('deviceorientation', handleGyro);
+                calibrateGyro();
+            }
+        } else {
+            window.removeEventListener('deviceorientation', handleGyro);
+            sendUpdate(`ABS_RX:0`);
+            sendUpdate(`ABS_RY:0`);
+        }
+    });
+
+    calibrateBtn.addEventListener('click', calibrateGyro);
+}
+
+function updateGyroUI() {
+    if (useGyro) {
+        gyroIndicator.classList.replace('bg-white/10', 'bg-emerald-500');
+        gyroIndicator.firstElementChild.classList.add('translate-x-4');
+        calibrateBtn.classList.remove('hidden');
+        document.getElementById('base-right').style.opacity = '0.3';
+    } else {
+        gyroIndicator.classList.replace('bg-emerald-500', 'bg-white/10');
+        gyroIndicator.firstElementChild.classList.remove('translate-x-4');
+        calibrateBtn.classList.add('hidden');
+        document.getElementById('base-right').style.opacity = '1';
+    }
+}
+
+let latestGyro = { beta: 0, gamma: 0 };
+function handleGyro(e) {
+    if (!useGyro || !isConnected) return;
+    latestGyro.beta = e.beta;
+    latestGyro.gamma = e.gamma;
+    
+    // Landscape Mode Assumption (Top of phone is Right or Left)
+    // Map phone tilt directly to Right Stick X/Y
+    
+    // Sensitivity Multiplier
+    const multi = joystickSens * 2;
+    
+    // Calculate difference from calibrated center
+    let steerX = (latestGyro.beta - gyroOffset.beta) * multi;
+    let steerY = (latestGyro.gamma - gyroOffset.gamma) * multi;
+
+    // Normalize roughly (e.g., 45 degrees tilt = max)
+    let nx = steerX / 45.0;
+    let ny = steerY / 45.0;
+
+    nx = Math.max(-1, Math.min(1, nx));
+    ny = Math.max(-1, Math.min(1, ny));
+
+    const iX = Math.round(nx * 32767);
+    const iY = Math.round(ny * 32767);
+
+    // Send to Right Stick
+    sendUpdate(`ABS_RX:${iX}`);
+    // sendUpdate(`ABS_RY:${iY}`); // Usually steering only needs X in racing 
+}
+
+function calibrateGyro() {
+    gyroOffset.beta = latestGyro.beta;
+    gyroOffset.gamma = latestGyro.gamma;
+    calibrateBtn.textContent = "Done";
+    calibrateBtn.classList.replace('border-emerald-500/50', 'border-white');
+    setTimeout(() => {
+        calibrateBtn.textContent = "Calibrate";
+        calibrateBtn.classList.replace('border-white', 'border-emerald-500/50');
+    }, 1000);
+}
+
+
+// --- WEBSOCKETS ---
+function setupWebSocket() {
+    connectBtn.addEventListener('click', () => {
+        if (!isConnected) {
+            connect();
+        } else {
+            ws.close();
+        }
+    });
+
+    // Auto-fetch config from server then connect
+    fetch('/api/config')
+        .then(res => res.json())
+        .then(config => {
+            if (config.ws_port) wsPort = config.ws_port;
+            if (config.ws_protocol) wsProtocol = config.ws_protocol;
+            connect();
+        })
+        .catch(e => {
+            console.error("Config fetch failed, using fallback ports.");
+            wsProtocol = window.location.protocol === 'https:' ? 'wss' : 'ws';
+            wsPort = window.location.protocol === 'https:' ? 5443 : 5005;
+            connect();
+        });
+}
+
+function connect() {
+    const wsUrl = `${wsProtocol}://${window.location.hostname}:${wsPort}`;
+    connectBtn.textContent = "Connecting...";
+    
+    try {
+        ws = new WebSocket(wsUrl);
+        
+        ws.onopen = () => {
+            isConnected = true;
+            connectBtn.textContent = "Connected";
+            connectBtn.classList.replace('bg-blue-500/20', 'bg-emerald-500/20');
+            connectBtn.classList.replace('text-blue-400', 'text-emerald-400');
+            connectBtn.classList.replace('border-blue-500/50', 'border-emerald-500/50');
+        };
+
+        ws.onclose = () => {
+            isConnected = false;
+            connectBtn.textContent = "Connect PC";
+            connectBtn.classList.replace('bg-emerald-500/20', 'bg-red-500/20');
+            connectBtn.classList.replace('text-emerald-400', 'text-red-400');
+            connectBtn.classList.replace('border-emerald-500/50', 'border-red-500/50');
+            
+            // Retry
+            setTimeout(connect, 3000);
+        };
+
+        ws.onmessage = (e) => {
+            // Handle server messages (slot id)
+            if(e.data.startsWith('S:')) {
+                console.log("Gamepad Slot:", e.data.substring(2));
+            }
+        };
+
+        ws.onerror = (e) => {
+            console.error("WebSocket Error:", e);
+        };
+        
+    } catch (e) {
+        console.error("WebSocket Exception", e);
+    }
+}
+
+function sendUpdate(data) {
+    if (isConnected && ws.readyState === WebSocket.OPEN) {
+        ws.send(data);
+    }
+}
+
+// Kickoff
+window.onload = init;

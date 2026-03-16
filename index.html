@@ -1,140 +1,421 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#0b0f14">
-  <title>Joystick PWA</title>
-  <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#020617">
+    <link rel="manifest" href="manifest.json">
+    <title>State of the Art Controller</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            /* Core UI Variables - Glassmorphic System */
+            --glass-bg: rgba(20, 22, 28, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-highlight: rgba(255, 255, 255, 0.15);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+            --btn-scale: 1;
+            
+            /* Xbox Theme Default */
+            --accent-glow: rgba(16, 185, 129, 0.4); /* Emerald */
+            --btn-text-a: #10b981;
+            --btn-text-b: #ef4444;
+            --btn-text-x: #3b82f6;
+            --btn-text-y: #f59e0b;
+            --font-main: 'Inter', system-ui, sans-serif;
+            --stick-cap: #1a1d24;
+            --stick-grip: repeating-radial-gradient(circle, transparent 0, transparent 3px, rgba(0,0,0,0.4) 4px, rgba(0,0,0,0.4) 5px);
+        }
+
+        .theme-ps5 {
+            --accent-glow: rgba(59, 130, 246, 0.4); /* Blue */
+            --btn-text-a: #3b82f6;
+            --btn-text-b: #ef4444;
+            --btn-text-x: #ec4899;
+            --btn-text-y: #10b981;
+            --stick-cap: #e2e8f0;
+            --stick-grip: repeating-radial-gradient(circle, transparent 0, transparent 3px, rgba(0,0,0,0.1) 4px, rgba(0,0,0,0.1) 5px);
+            --glass-bg: rgba(255, 255, 255, 0.1);
+            --glass-border: rgba(255, 255, 255, 0.2);
+        }
+
+        body {
+            /* Pure black for Xbox theme */
+            background: #000000;
+            color: white;
+            overflow: hidden;
+            touch-action: none;
+            font-family: var(--font-main);
+            user-select: none;
+            -webkit-user-select: none;
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            overscroll-behavior: none;
+        }
+        
+        html {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            overscroll-behavior: none;
+        }
+
+        /* Reusable Glass Utility */
+        .glass-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+        }
+
+        /* Scalability & Settings UI */
+        .scalable-control {
+            transform: scale(var(--btn-scale));
+            transform-origin: center center;
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        /* Edit Mode Highlights */
+        .edit-mode-active {
+            border: 2px dashed #fbbf24 !important;
+            background: rgba(251, 191, 36, 0.1) !important;
+            border-radius: 10px;
+            cursor: move;
+        }
+
+        input[type=range] {
+            -webkit-appearance: none;
+            background: rgba(255,255,255,0.1);
+            height: 4px;
+            border-radius: 2px;
+            outline: none;
+            width: 60px;
+        }
+        input[type=range]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 14px;
+            height: 14px;
+            background: var(--accent-glow, white);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 0 10px rgba(255,255,255,0.8);
+            border: 2px solid white;
+        }
+
+        /* --- 3x3 Grid Systems for Flawless Spacing --- */
+        .control-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(3, 1fr);
+            gap: 12px;
+            width: 240px;
+            height: 240px;
+            position: absolute;
+        }
+
+        /* Action Buttons */
+        .action-btn {
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2rem;
+            font-weight: 800;
+            transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            z-index: 10;
+            color: white; /* Default text color, overridden by glowing spans */
+        }
+        
+        .action-btn::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%);
+            z-index: -1;
+        }
+
+        .action-btn.active {
+            transform: scale(0.92);
+            background: var(--glass-highlight);
+            box-shadow: 0 0 20px var(--accent-glow);
+        }
+
+        .action-btn span { text-shadow: 0 2px 10px currentColor; }
+        #btn-a span { color: var(--btn-text-a); }
+        #btn-b span { color: var(--btn-text-b); }
+        #btn-x span { color: var(--btn-text-x); }
+        #btn-y span { color: var(--btn-text-y); }
+
+        /* Unified D-Pad */
+        .dpad-base {
+            grid-column: 1 / 4;
+            grid-row: 1 / 4;
+            background: var(--glass-bg);
+            border-radius: 50%;
+            clip-path: polygon(33% 0, 66% 0, 66% 33%, 100% 33%, 100% 66%, 66% 66%, 66% 100%, 33% 100%, 33% 66%, 0 66%, 0 33%, 33% 33%);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(8px);
+        }
+
+        .dpad-btn {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.1s;
+            color: rgba(255,255,255,0.6);
+            z-index: 5;
+        }
+        .dpad-btn.active {
+            background: rgba(255,255,255,0.2);
+            color: white;
+        }
+
+        /* Joysticks */
+        .stick-housing {
+            width: 180px;
+            height: 180px;
+            border-radius: 50%;
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .stick-nipple {
+            width: 96px;
+            height: 96px;
+            border-radius: 50%;
+            background-color: var(--stick-cap);
+            position: absolute;
+            box-shadow: 
+                0 15px 25px rgba(0,0,0,0.5),
+                inset 0 4px 6px rgba(255,255,255,0.2),
+                inset 0 -4px 8px rgba(0,0,0,0.6);
+            border: 1px solid rgba(0,0,0,0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            will-change: transform;
+            z-index: 20;
+            transition: box-shadow 0.2s;
+        }
+
+        .stick-nipple::before {
+            content: '';
+            position: absolute;
+            inset: 2px;
+            border-radius: 50%;
+            background: var(--stick-grip);
+            opacity: 0.8;
+            pointer-events: none;
+        }
+
+        .stick-nipple::after {
+            content: '';
+            position: absolute;
+            inset: 25%;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(0,0,0,0.4) 0%, transparent 70%);
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+            pointer-events: none;
+        }
+
+        .stick-active {
+            box-shadow: 
+                0 20px 30px rgba(0,0,0,0.6),
+                0 0 30px var(--accent-glow),
+                inset 0 4px 6px rgba(255,255,255,0.2);
+        }
+
+        /* Triggers / Shoulder Buttons */
+        .shoulder-group {
+            position: absolute;
+            top: 4vw;
+            width: 160px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            z-index: 70;
+        }
+        
+        .trigger-btn {
+            height: 44px;
+            width: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            letter-spacing: 2px;
+            font-size: 0.9rem;
+            color: rgba(255,255,255,0.8);
+            transition: all 0.1s;
+        }
+        
+        .trigger-btn.active {
+            background: rgba(255,255,255,0.15);
+            color: white;
+            box-shadow: 0 0 15px var(--accent-glow);
+        }
+
+        /* Layout Architecture */
+        .hud-container {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            z-index: 10;
+        }
+
+        /* Orientation lock overlay */
+        @media (orientation: portrait) {
+            #rotate-overlay { display: flex; }
+            #ui-layer { display: none; }
+        }
+    </style>
 </head>
-<body>
-  <main class="app">
-    <header class="topbar">
-      <div class="brand">
-        <div class="brand-mark"></div>
-        <div>
-          <div class="brand-title">Mobile Wheel</div>
-          <div class="brand-sub">Controller Console</div>
-        </div>
-      </div>
+<body class="w-screen h-screen">
 
-      <div class="connect">
-        <input id="ipInput" type="text" inputmode="decimal" placeholder="192.168.1.10" autocomplete="off">
-        <button id="connectBtn" class="btn primary">Connect</button>
-        <button id="motionBtn" class="btn toggle">Enable Motion</button>
-      </div>
+    <!-- Portrait Block -->
+    <div id="rotate-overlay" class="fixed inset-0 z-[100] bg-black hidden flex-col items-center justify-center text-center p-8">
+        <svg class="w-16 h-16 text-white mb-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
+        </svg>
+        <h1 class="text-2xl font-bold text-white tracking-wide">Landscape Required</h1>
+    </div>
 
-      <div class="status-panel">
-        <div class="status-row">
-          <span id="statusDot" class="status-dot"></span>
-          <span id="statusText">Disconnected</span>
-        </div>
-        <div id="sensorText" class="sensor-text">Motion: Not enabled</div>
-        <div class="status-actions">
-          <button id="invertBtn" class="btn toggle">Invert L/R: Off</button>
-          <button id="calibrateBtn" class="btn calibrate">Calibrate</button>
-        </div>
-      </div>
-    </header>
+    <!-- Main HUD Layer -->
+    <div id="ui-layer" class="hud-container pointer-events-none">
 
-    <section class="mode-panel">
-      <div class="panel-card">
-        <div class="panel-title">Controller</div>
-        <div class="profile-buttons">
-          <button id="profileXbox" class="btn profile profile-xbox active">
-            <span class="profile-title">Xbox</span>
-            <span class="profile-sub">Series</span>
-          </button>
-          <button id="profilePs" class="btn profile profile-ps5">
-            <span class="profile-title">PS5</span>
-            <span class="profile-sub">DualSense</span>
-          </button>
-          <button id="profileAssetto" class="btn profile profile-racing">
-            <span class="profile-title">Racing</span>
-            <span class="profile-sub">Assetto</span>
-          </button>
-        </div>
-      </div>
+        <!-- Top Settings Bar (Hidden by Default) -->
+        <div id="settings-bar" class="hidden absolute top-4 left-1/2 transform -translate-x-1/2 glass-panel px-4 py-2 rounded-full flex items-center justify-center gap-4 shadow-2xl z-[90] w-fit max-w-[90vw] pointer-events-auto text-xs whitespace-nowrap overflow-x-auto" style="scrollbar-width: none;">
+            
+            <!-- Connection & Edit Mode -->
+            <div class="flex items-center gap-4 shrink-0">
+                <button id="connect-btn" class="bg-blue-500/20 text-blue-400 border border-blue-500/50 px-4 py-1.5 rounded-full hover:bg-blue-500/40 transition font-bold tracking-wide">Connect PC</button>
+                <button id="edit-layout-btn" class="bg-yellow-500/20 text-yellow-400 border border-yellow-500/50 px-3 py-1.5 rounded-full hover:bg-yellow-500/40 transition font-bold">Edit Layout</button>
+            </div>
 
-      <div class="panel-card">
-        <div class="panel-title">Output</div>
-        <div class="output-buttons">
-          <button id="outputGamepad" class="btn output active">Gamepad</button>
-          <button id="outputKeyboard" class="btn output">Keyboard</button>
-        </div>
-        <div class="panel-title">Drive</div>
-        <div class="drive-buttons">
-          <button id="driveNormal" class="btn drive active">Balanced</button>
-          <button id="driveAssetto" class="btn drive">Assetto</button>
-        </div>
-      </div>
+            <!-- Profile Selection -->
+            <div class="flex items-center gap-2 border-l border-white/10 pl-4 shrink-0">
+                <span class="text-white/50 hidden sm:inline">Profile:</span>
+                <select id="profile-sel" class="bg-black/40 border border-white/10 rounded-md text-white px-2 py-1 outline-none font-bold">
+                    <option value="default">Default</option>
+                    <option value="racing">Racing</option>
+                    <option value="shooter">Shooter</option>
+                </select>
+            </div>
 
-      <div class="panel-card sensitivity">
-        <div class="panel-title">Steer Sensitivity</div>
-        <div class="slider-wrap">
-          <input id="sensitivitySlider" type="range" min="50" max="140" value="100" step="1">
-          <div id="sensitivityValue" class="slider-value">100%</div>
-        </div>
-      </div>
-    </section>
+            <!-- Tweaks (Size & Sens) -->
+            <div class="flex items-center gap-6 hidden md:flex border-l border-white/10 pl-4 shrink-0">
+                <div class="flex items-center gap-2">
+                    <span class="text-white/50">Size</span>
+                    <input type="range" id="size-slider" min="0.75" max="1.5" step="0.05" value="1">
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="text-white/50">Sens</span>
+                    <input type="range" id="sens-slider" min="0.5" max="2" step="0.1" value="1">
+                </div>
+            </div>
 
-    <section class="controller-stage">
-      <div class="controller-body"></div>
+            <!-- Gyro Steering -->
+            <div class="flex items-center gap-3 border-l border-white/10 pl-4 shrink-0">
+                <label class="flex items-center gap-2 cursor-pointer">
+                    <input type="checkbox" id="gyro-toggle" class="hidden">
+                    <span class="text-white/50 font-bold">Gyro</span>
+                    <div id="gyro-indicator" class="w-8 h-4 bg-white/10 rounded-full relative transition-colors">
+                        <div class="w-4 h-4 bg-white rounded-full absolute left-0 transition-transform"></div>
+                    </div>
+                </label>
+                <button id="calibrate-btn" class="hidden bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 px-3 py-1 rounded-full hover:bg-emerald-500/40 transition font-bold active:scale-95">Calibrate</button>
+            </div>
+        </div>
 
-      <div class="left-cluster">
-        <div id="brakeZone" class="pedal-zone brake">
-          <div class="zone-label">Brake</div>
-          <div class="meter-track">
-            <div id="brakeMeter" class="meter-fill brake-fill"></div>
-          </div>
-          <div id="brakeValue" class="zone-value">0%</div>
+        <!-- Theme & Settings Toggle Bar (Moved back to top) -->
+        <div class="absolute glass-panel px-6 py-2 rounded-full flex items-center justify-center gap-6 shadow-lg z-50 pointer-events-auto" style="top: 8vh; left: 50%; transform: translateX(-50%);">
+            <button onclick="setTheme('xbox')" class="text-sm font-bold tracking-widest text-emerald-400 hover:text-white transition-colors">XBOX</button>
+            <div class="w-px h-4 bg-white/20"></div>
+            <button onclick="setTheme('ps5')" class="text-sm font-bold tracking-widest text-blue-400 hover:text-white transition-colors">PS5</button>
+            <div class="w-px h-4 bg-white/20"></div>
+            <button id="settings-toggle-btn" class="text-white/50 hover:text-white transition-colors" title="Toggle Settings">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                </svg>
+            </button>
         </div>
-        <div id="gasZone" class="pedal-zone gas">
-          <div class="zone-label">Gas</div>
-          <div class="meter-track">
-            <div id="gasMeter" class="meter-fill gas-fill"></div>
-          </div>
-          <div id="gasValue" class="zone-value">0%</div>
-        </div>
-      </div>
 
-      <div class="center-cluster">
-        <div class="steering-header">
-          <h1>Steering</h1>
-          <p id="steeringValue">Steering: 0.00</p>
+        <!-- Middle Control Buttons (Share, Home, Menu) -->
+        <div id="middle-buttons" class="absolute flex items-center justify-between w-[220px] pointer-events-auto z-40 scalable-control" style="left: calc(50% - 110px); top: calc(50% - 32px);">
+            <!-- Share / View -->
+            <button class="w-10 h-10 glass-panel rounded-full flex items-center justify-center active:scale-90 transition-transform shadow-md hover:bg-white/10" data-btn="Share">
+                <svg class="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+            </button>
+            
+            <!-- Home / PS / Xbox -->
+            <button class="w-16 h-16 rounded-full glass-panel border border-white/20 flex items-center justify-center shadow-[0_0_20px_rgba(0,0,0,0.4)] active:scale-90 transition-transform hover:bg-white/10" data-btn="Home">
+                <span id="home-icon" class="font-bold text-2xl text-emerald-400">X</span>
+            </button>
+            
+            <!-- Menu / Options -->
+            <button class="w-10 h-10 glass-panel rounded-full flex items-center justify-center active:scale-90 transition-transform shadow-md hover:bg-white/10" data-btn="Menu">
+                <svg class="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            </button>
         </div>
-        <div class="wheel-wrap">
-          <div id="wheelGlow" class="wheel-glow"></div>
-          <div id="wheel" class="wheel">
-            <div class="wheel-core"></div>
-            <div class="spoke spoke-a"></div>
-            <div class="spoke spoke-b"></div>
-            <div class="spoke spoke-c"></div>
-          </div>
-        </div>
-      </div>
 
-      <div class="right-cluster">
-        <div class="action-header">
-          <h2>Buttons</h2>
-          <p id="actionHint">Xbox layout</p>
+        <!-- Top Shoulders (Made Scalable & Repositionable) -->
+        <div id="shoulder-left" class="shoulder-group pointer-events-auto scalable-control" style="left: 8vw; top: 4vw;">
+            <div class="trigger-btn glass-panel rounded-t-2xl rounded-b-lg h-12" data-btn="L1">L1</div>
+            <div class="trigger-btn glass-panel rounded-b-3xl rounded-t-lg h-16 text-lg" data-btn="L2">L2</div>
         </div>
-        <div class="shoulder-row">
-          <button id="btnLb" class="btn action">LB</button>
-          <button id="btnRb" class="btn action">RB</button>
+        
+        <div id="shoulder-right" class="shoulder-group pointer-events-auto scalable-control" style="right: 8vw; top: 4vw;">
+            <div class="trigger-btn glass-panel rounded-t-2xl rounded-b-lg h-12" data-btn="R1">R1</div>
+            <div class="trigger-btn glass-panel rounded-b-3xl rounded-t-lg h-16 text-lg" data-btn="R2">R2</div>
         </div>
-        <div class="face-grid">
-          <div></div>
-          <button id="btnNorth" class="btn action">Y</button>
-          <div></div>
-          <button id="btnWest" class="btn action">X</button>
-          <button id="btnSouth" class="btn action primary-action">A</button>
-          <button id="btnEast" class="btn action warn-action">B</button>
-        </div>
-      </div>
-    </section>
-  </main>
 
-  <script src="app.js" defer></script>
+        <!-- THUMB ARC LAYOUT: LEFT SIDE -->
+        <div id="dpad-grid" class="control-grid pointer-events-auto scalable-control" style="left: 6vw; top: 35vh; width: 210px; height: 210px;">
+            <div class="dpad-base absolute inset-0"></div>
+            <!-- Grid Cells -->
+            <div class="col-start-2 row-start-1 dpad-btn rounded-t-lg" data-btn="Up">
+                <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd"></path></svg>
+            </div>
+            <div class="col-start-1 row-start-2 dpad-btn rounded-l-lg" data-btn="Left">
+                <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
+            </div>
+            <div class="col-start-2 row-start-2 dpad-btn rounded-full bg-white/5 backdrop-blur-sm m-2 border border-white/10 shadow-inner" data-btn="L3"></div>
+            <div class="col-start-3 row-start-2 dpad-btn rounded-r-lg" data-btn="Right">
+                <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path></svg>
+            </div>
+            <div class="col-start-2 row-start-3 dpad-btn rounded-b-lg" data-btn="Down">
+                <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
+            </div>
+        </div>
+        
+        <div id="base-left" class="stick-housing glass-panel pointer-events-auto scalable-control" style="left: 22vw; top: 60vh;">
+            <div class="stick-nipple" id="stick-left"></div>
+        </div>
+
+        <!-- THUMB ARC LAYOUT: RIGHT SIDE -->
+        <div id="action-grid" class="control-grid pointer-events-auto scalable-control" style="right: 6vw; top: 30vh;">
+            <div class="action-btn glass-panel col-start-2 row-start-1" id="btn-y" data-btn="Y"><span>Y</span></div>
+            <div class="action-btn glass-panel col-start-1 row-start-2" id="btn-x" data-btn="X"><span>X</span></div>
+            <div class="action-btn glass-panel col-start-3 row-start-2" id="btn-b" data-btn="B"><span>B</span></div>
+            <div class="action-btn glass-panel col-start-2 row-start-3" id="btn-a" data-btn="A"><span>A</span></div>
+        </div>
+
+        <div id="base-right" class="stick-housing glass-panel pointer-events-auto scalable-control" style="right: 24vw; top: 60vh;">
+            <div class="stick-nipple" id="stick-right"></div>
+        </div>
+
+    </div>
+
+    <script src="app.js"></script>
 </body>
 </html>
