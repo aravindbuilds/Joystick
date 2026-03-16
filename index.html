@@ -447,9 +447,12 @@
                     </div>
                 </label>
                 <button id="calibrate-btn" class="hidden bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-xl hover:bg-emerald-500/20 font-bold active:scale-95">Calibrate</button>
-                <label class="flex items-center gap-2 cursor-pointer ml-2">
+                <label class="flex items-center gap-3 cursor-pointer group ml-2">
                     <input type="checkbox" id="debug-toggle" class="hidden">
-                    <span class="text-white/40 font-bold uppercase text-[10px]">Debug</span>
+                    <span class="text-white/50 font-bold uppercase tracking-wider text-[10px] group-hover:text-white/80 transition-colors">Debug</span>
+                    <div id="debug-indicator" class="w-10 h-5 bg-black/50 border border-white/10 rounded-full relative transition-colors shadow-inner">
+                        <div class="w-5 h-5 bg-white/70 rounded-full absolute left-0 top-[-1px] transition-transform shadow-md"></div>
+                    </div>
                 </label>
             </div>
         </div>
@@ -506,11 +509,11 @@
         </div>
 
         <!-- Left controls -->
-        <div id="base-left" class="stick-housing pointer-events-auto scalable-control" style="left: 6vw; top: 28vh;" data-name="Left Joystick" data-scale="--joystick-scale">
+        <div id="base-left" class="stick-housing pointer-events-auto scalable-control" style="left: 6vw; bottom: 12vh;" data-name="Left Joystick" data-scale="--joystick-scale">
             <div class="stick-nipple" id="stick-left"></div>
         </div>
 
-        <div id="dpad-grid" class="control-grid pointer-events-auto scalable-control" style="left: 20vw; bottom: 12vh;" data-name="D-Pad" data-scale="--dpad-scale" data-gap="--dpad-gap">
+        <div id="dpad-grid" class="control-grid pointer-events-auto scalable-control" style="left: 6vw; top: 28vh;" data-name="D-Pad" data-scale="--dpad-scale" data-gap="--dpad-gap">
             <div class="dpad-base"></div>
             <div class="col-start-2 row-start-1 dpad-btn rounded-t-xl" data-btn="Up"><svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd"></path></svg></div>
             <div class="col-start-1 row-start-2 dpad-btn rounded-l-xl" data-btn="Left"><svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg></div>
@@ -528,7 +531,7 @@
             <div class="action-btn col-start-2 row-start-3" id="btn-a" data-btn="A"><span>A</span></div>
         </div>
 
-        <div id="base-right" class="stick-housing pointer-events-auto scalable-control" style="right: 20vw; bottom: 12vh;" data-name="Right Joystick" data-scale="--joystick-scale">
+        <div id="base-right" class="stick-housing pointer-events-auto scalable-control" style="right: 6vw; bottom: 12vh;" data-name="Right Joystick" data-scale="--joystick-scale">
             <div class="stick-nipple" id="stick-right"></div>
         </div>
 
@@ -883,10 +886,10 @@
             'shoulder-left': 'left: 4vw; top: 4vh;',
             'shoulder-right': 'right: 4vw; top: 4vh;',
             'dpad-grid': 'left: 6vw; top: 28vh;',
-            'base-left': 'left: 20vw; bottom: 12vh;',
+            'base-left': 'left: 6vw; bottom: 12vh;',
             'middle-buttons': 'left: calc(50% - 110px); top: 30vh;',
             'action-grid': 'right: 6vw; top: 28vh;',
-            'base-right': 'right: 20vw; bottom: 12vh;'
+            'base-right': 'right: 6vw; bottom: 12vh;'
         };
 
         document.getElementById('reset-layout-btn').addEventListener('click', () => {
@@ -923,12 +926,38 @@
             const maxRadius = 45;
             const DEADZONE = 0.05; // Ignore movements < 5% to reduce tiny updates
             
-            let dx = Math.max(-maxRadius, Math.min(maxRadius, normX * maxRadius * globalSens));
-            let dy = Math.max(-maxRadius, Math.min(maxRadius, normY * maxRadius * globalSens));
-
-            // Apply deadzone: values < deadzone become 0
-            const normalizedX = Math.abs(dx / maxRadius) < DEADZONE ? 0 : (dx / maxRadius);
-            const normalizedY = Math.abs(dy / maxRadius) < DEADZONE ? 0 : (dy / maxRadius);
+            // Calculate raw input with sensitivity applied
+            const rawDx = normX * maxRadius * globalSens;
+            const rawDy = normY * maxRadius * globalSens;
+            
+            // Calculate magnitude of input (unclamped - for output mapping)
+            const inputDistance = Math.sqrt(rawDx * rawDx + rawDy * rawDy);
+            
+            // Clamp visual position to circle boundary
+            let dx, dy;
+            if (inputDistance > maxRadius) {
+                // User pushed beyond circle - clamp visual but use full magnitude for mapping
+                const angle = Math.atan2(rawDy, rawDx);
+                dx = Math.cos(angle) * maxRadius;
+                dy = Math.sin(angle) * maxRadius;
+            } else {
+                dx = rawDx;
+                dy = rawDy;
+            }
+            
+            // Calculate output mapping based on actual input distance
+            // This allows values to reach ±1.0 at the circle edge
+            let outputMagnitude = Math.min(inputDistance / maxRadius, 1.0);
+            
+            // Apply deadzone
+            if (outputMagnitude < DEADZONE) {
+                outputMagnitude = 0;
+            }
+            
+            // Normalize output direction while preserving magnitude
+            const outputAngle = Math.atan2(rawDy, rawDx);
+            const normalizedX = outputMagnitude * Math.cos(outputAngle);
+            const normalizedY = outputMagnitude * Math.sin(outputAngle);
 
             if(stickId === 'stick-left') {
                 state.axes.lx = normalizedX;
