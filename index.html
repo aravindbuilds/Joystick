@@ -2,123 +2,150 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="theme-color" content="#020617">
-    <link rel="manifest" href="manifest.json">
     <title>State of the Art Controller</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root {
-            /* Core UI Variables - Glassmorphic System */
-            --glass-bg: rgba(20, 22, 28, 0.4);
-            --glass-border: rgba(255, 255, 255, 0.08);
-            --glass-highlight: rgba(255, 255, 255, 0.15);
-            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
-            --btn-scale: 1;
+            /* Core UI Variables - Ultra Premium OLED Dark */
+            --glass-bg: rgba(10, 12, 18, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.06);
+            --glass-border-top: rgba(255, 255, 255, 0.12);
+            --glass-shadow: 0 10px 30px 0 rgba(0, 0, 0, 0.8), inset 0 1px 1px rgba(255, 255, 255, 0.05);
+            
+            /* Scaling & Spacing Architecture */
+            --master-scale: 1;
+            --action-btn-scale: 1;
+            --action-gap: 8px;
+            --dpad-scale: 1;
+            --dpad-gap: 6px;
+            --trigger-scale: 1;
+            --shoulder-scale: 1;
+            --joystick-scale: 1;
+            --middle-scale: 1;
             
             /* Xbox Theme Default */
-            --accent-glow: rgba(16, 185, 129, 0.4); /* Emerald */
+            --accent-glow: rgba(16, 185, 129, 0.8);
+            --accent-glow-soft: rgba(16, 185, 129, 0.3);
             --btn-text-a: #10b981;
             --btn-text-b: #ef4444;
             --btn-text-x: #3b82f6;
             --btn-text-y: #f59e0b;
             --font-main: 'Inter', system-ui, sans-serif;
-            --stick-cap: #1a1d24;
-            --stick-grip: repeating-radial-gradient(circle, transparent 0, transparent 3px, rgba(0,0,0,0.4) 4px, rgba(0,0,0,0.4) 5px);
+            --stick-base-glow: rgba(16, 185, 129, 0.15);
+            --panel-gradient: linear-gradient(145deg, rgba(255,255,255,0.03) 0%, rgba(0,0,0,0.4) 100%);
         }
 
         .theme-ps5 {
-            --accent-glow: rgba(59, 130, 246, 0.4); /* Blue */
+            --accent-glow: rgba(59, 130, 246, 0.9);
+            --accent-glow-soft: rgba(59, 130, 246, 0.4);
             --btn-text-a: #3b82f6;
             --btn-text-b: #ef4444;
             --btn-text-x: #ec4899;
             --btn-text-y: #10b981;
-            --stick-cap: #e2e8f0;
-            --stick-grip: repeating-radial-gradient(circle, transparent 0, transparent 3px, rgba(0,0,0,0.1) 4px, rgba(0,0,0,0.1) 5px);
-            --glass-bg: rgba(255, 255, 255, 0.1);
-            --glass-border: rgba(255, 255, 255, 0.2);
+            --stick-base-glow: rgba(59, 130, 246, 0.15);
+            --glass-bg: rgba(15, 18, 28, 0.6);
+            --panel-gradient: linear-gradient(145deg, rgba(255,255,255,0.05) 0%, rgba(0,0,0,0.3) 100%);
         }
 
         body {
-            /* Pure black for Xbox theme */
-            background: #000000;
+            /* Deep OLED Vignette */
+            background: radial-gradient(circle at 50% 50%, #1a1c26 0%, #000000 80%);
             color: white;
             overflow: hidden;
-            touch-action: none;
+            touch-action: manipulation;
             font-family: var(--font-main);
             user-select: none;
             -webkit-user-select: none;
-            position: fixed;
+            -webkit-touch-callout: none;
+            -webkit-user-scalable: no;
             width: 100%;
             height: 100%;
-            overscroll-behavior: none;
-        }
-        
-        html {
-            position: fixed;
-            width: 100%;
-            height: 100%;
-            overscroll-behavior: none;
+            transition: background 0.5s ease;
         }
 
-        /* Reusable Glass Utility */
+        .hidden { display: none !important; }
+        .pointer-events-none { pointer-events: none !important; }
+        .pointer-events-auto { pointer-events: auto !important; }
+        button, [data-btn] { touch-action: none; }
+
         .glass-panel {
             background: var(--glass-bg);
-            backdrop-filter: blur(16px);
-            -webkit-backdrop-filter: blur(16px);
+            background-image: var(--panel-gradient);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
             border: 1px solid var(--glass-border);
+            border-top: 1px solid var(--glass-border-top);
             box-shadow: var(--glass-shadow);
         }
 
-        /* Scalability & Settings UI */
+        /* Component Multiplier Scaling */
+        #middle-buttons { transform: scale(calc(var(--middle-scale) * var(--master-scale))) translateZ(0); backface-visibility: hidden; }
+        #shoulder-left, #shoulder-right { transform: scale(calc(var(--shoulder-scale) * var(--master-scale))) translateZ(0); backface-visibility: hidden; }
+        #dpad-grid { transform: scale(calc(var(--dpad-scale) * var(--master-scale))) translateZ(0); backface-visibility: hidden; }
+        #action-grid { transform: scale(calc(var(--action-btn-scale) * var(--master-scale))) translateZ(0); backface-visibility: hidden; }
+        #base-left, #base-right { transform: scale(calc(var(--joystick-scale) * var(--master-scale))) translateZ(0); backface-visibility: hidden; }
+
         .scalable-control {
-            transform: scale(var(--btn-scale));
             transform-origin: center center;
-            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            will-change: transform;
+            backface-visibility: hidden;
+            transform: translateZ(0);
         }
         
-        /* Edit Mode Highlights */
-        .edit-mode-active {
-            border: 2px dashed #fbbf24 !important;
-            background: rgba(251, 191, 36, 0.1) !important;
-            border-radius: 10px;
+        /* Edit Mode Overlays */
+        .edit-mode-idle {
+            outline: 2px dashed rgba(255,255,255,0.2) !important;
+            background: rgba(255,255,255,0.02) !important;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+        .edit-mode-selected {
+            outline: 3px solid #06b6d4 !important;
+            background: rgba(6, 182, 212, 0.1) !important;
+            border-radius: 20px;
             cursor: move;
+            box-shadow: 0 0 20px rgba(6, 182, 212, 0.4);
+            z-index: 95 !important;
         }
 
+        /* Sleek Custom Sliders */
         input[type=range] {
             -webkit-appearance: none;
-            background: rgba(255,255,255,0.1);
-            height: 4px;
-            border-radius: 2px;
+            background: rgba(0,0,0,0.8);
+            height: 8px;
+            border-radius: 4px;
             outline: none;
-            width: 60px;
+            width: 100%;
+            box-shadow: inset 0 1px 3px rgba(0,0,0,1), 0 1px 0 rgba(255,255,255,0.1);
         }
         input[type=range]::-webkit-slider-thumb {
             -webkit-appearance: none;
-            width: 14px;
-            height: 14px;
-            background: var(--accent-glow, white);
+            width: 20px;
+            height: 20px;
+            background: #ffffff;
             border-radius: 50%;
             cursor: pointer;
-            box-shadow: 0 0 10px rgba(255,255,255,0.8);
-            border: 2px solid white;
+            box-shadow: 0 0 12px var(--accent-glow), 0 2px 6px rgba(0,0,0,0.8);
         }
 
-        /* --- 3x3 Grid Systems for Flawless Spacing --- */
+        /* --- Dynamic Grid Systems --- */
         .control-grid {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            grid-template-rows: repeat(3, 1fr);
-            gap: 12px;
-            width: 240px;
-            height: 240px;
+            grid-template-columns: 48px 48px 48px;
+            grid-template-rows: 48px 48px 48px;
+            width: max-content;
+            height: max-content;
             position: absolute;
         }
+        
+        #action-grid { gap: var(--action-gap); }
+        #dpad-grid { gap: var(--dpad-gap); }
 
-        /* Action Buttons */
+        /* Action Buttons - Tactile Dome */
         .action-btn {
             border-radius: 50%;
             display: flex;
@@ -126,119 +153,172 @@
             justify-content: center;
             font-size: 2rem;
             font-weight: 800;
-            transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: all 0.1s cubic-bezier(0.34, 1.56, 0.64, 1);
             position: relative;
             z-index: 10;
-            color: white; /* Default text color, overridden by glowing spans */
+            color: white;
+            background: linear-gradient(135deg, #2a2d3e 0%, #151722 100%);
+            box-shadow: inset 0 2px 4px rgba(255,255,255,0.15), inset 0 -4px 8px rgba(0,0,0,0.8), 0 10px 15px rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(0,0,0,0.9);
+            width: 100%;
+            height: 100%;
         }
         
         .action-btn::before {
             content: '';
             position: absolute;
-            inset: 0;
+            inset: 2px;
             border-radius: 50%;
-            background: linear-gradient(135deg, rgba(255,255,255,0.1) 0%, rgba(255,255,255,0) 100%);
-            z-index: -1;
+            background: linear-gradient(180deg, rgba(255,255,255,0.08) 0%, rgba(255,255,255,0) 50%);
+            pointer-events: none;
         }
 
         .action-btn.active {
-            transform: scale(0.92);
-            background: var(--glass-highlight);
-            box-shadow: 0 0 20px var(--accent-glow);
+            transform: scale(0.9);
+            background: linear-gradient(135deg, #151722 0%, #2a2d3e 100%);
+            box-shadow: inset 0 4px 10px rgba(0,0,0,0.9), 0 0 20px var(--accent-glow), 0 0 8px var(--accent-glow-soft);
         }
 
-        .action-btn span { text-shadow: 0 2px 10px currentColor; }
+        .action-btn span { 
+            text-shadow: 0 2px 15px currentColor; 
+            filter: drop-shadow(0 2px 2px rgba(0,0,0,0.8));
+        }
         #btn-a span { color: var(--btn-text-a); }
         #btn-b span { color: var(--btn-text-b); }
         #btn-x span { color: var(--btn-text-x); }
         #btn-y span { color: var(--btn-text-y); }
 
-        /* Unified D-Pad */
+        /* Unified Tactile D-Pad - Premium Style */
         .dpad-base {
             grid-column: 1 / 4;
             grid-row: 1 / 4;
-            background: var(--glass-bg);
+            background: radial-gradient(circle at 50% 50%, #1a1c28 0%, #0a0b12 100%);
             border-radius: 50%;
-            clip-path: polygon(33% 0, 66% 0, 66% 33%, 100% 33%, 100% 66%, 66% 66%, 66% 100%, 33% 100%, 33% 66%, 0 66%, 0 33%, 33% 33%);
-            border: 1px solid var(--glass-border);
-            backdrop-filter: blur(8px);
+            /* Precise mathematical cross polygon */
+            clip-path: polygon(
+                33.33% 0%, 66.66% 0%, 66.66% 33.33%, 
+                100% 33.33%, 100% 66.66%, 66.66% 66.66%, 
+                66.66% 100%, 33.33% 100%, 33.33% 66.66%, 
+                0% 66.66%, 0% 33.33%, 33.33% 33.33%
+            );
+            box-shadow: 
+                0 12px 24px rgba(0,0,0,0.8),
+                inset 0 2px 3px rgba(255,255,255,0.05),
+                inset 0 -2px 10px rgba(0,0,0,0.9);
+            position: absolute;
+            inset: 0;
+            z-index: 1;
+            border: 1px solid rgba(0,0,0,0.4);
         }
 
         .dpad-btn {
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: background 0.1s;
-            color: rgba(255,255,255,0.6);
+            transition: all 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+            color: rgba(255,255,255,0.3);
             z-index: 5;
+            position: relative;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(255,255,255,0.02) 0%, transparent 100%);
         }
-        .dpad-btn.active {
-            background: rgba(255,255,255,0.2);
-            color: white;
+        
+        .dpad-btn svg { 
+            filter: drop-shadow(0 2px 3px rgba(0,0,0,0.8)); 
+            transition: transform 0.1s, color 0.1s;
         }
 
-        /* Joysticks */
+        .dpad-btn.active {
+            background: rgba(0,0,0,0.6);
+            box-shadow: inset 0 4px 12px rgba(0,0,0,1);
+            transform: scale(0.96) translateY(1px);
+        }
+
+        .dpad-btn.active svg {
+            color: #fff;
+            filter: drop-shadow(0 0 8px rgba(255,255,255,0.4));
+            transform: scale(0.9);
+        }
+
+        /* Joysticks - Clean Matte Silicone */
         .stick-housing {
-            width: 180px;
-            height: 180px;
+            width: 160px;
+            height: 160px;
             border-radius: 50%;
             position: absolute;
             display: flex;
             align-items: center;
             justify-content: center;
+            background: linear-gradient(135deg, #11131c 0%, #050608 100%);
+            box-shadow: inset 0 15px 30px rgba(0,0,0,1), inset 0 1px 3px rgba(255,255,255,0.05), 0 2px 8px rgba(0,0,0,0.6);
+            border: 2px solid #000;
+        }
+        
+        .stick-housing::after {
+            content: '';
+            position: absolute;
+            inset: 8px;
+            border-radius: 50%;
+            border: 2px solid var(--stick-base-glow);
+            box-shadow: inset 0 0 15px var(--stick-base-glow);
+            opacity: 0.3;
+            pointer-events: none;
         }
 
         .stick-nipple {
-            width: 96px;
-            height: 96px;
+            width: 90px;
+            height: 90px;
             border-radius: 50%;
-            background-color: var(--stick-cap);
+            /* Matte Rubber Gradient */
+            background: radial-gradient(circle at 30% 30%, #353847 0%, #1b1d28 50%, #0c0d12 100%);
             position: absolute;
             box-shadow: 
-                0 15px 25px rgba(0,0,0,0.5),
-                inset 0 4px 6px rgba(255,255,255,0.2),
-                inset 0 -4px 8px rgba(0,0,0,0.6);
-            border: 1px solid rgba(0,0,0,0.8);
+                0 15px 25px rgba(0,0,0,0.9), 
+                inset 0 2px 4px rgba(255,255,255,0.15), 
+                inset 0 -5px 10px rgba(0,0,0,0.9), 
+                0 0 0 2px #222432, /* Metallic ring */
+                0 0 0 3px #050508;
+            border: none;
             display: flex;
             align-items: center;
             justify-content: center;
             will-change: transform;
+            transform: translateZ(0);
+            backface-visibility: hidden;
+            -webkit-font-smoothing: antialiased;
             z-index: 20;
-            transition: box-shadow 0.2s;
         }
 
+        /* Matte Grip Lines */
         .stick-nipple::before {
             content: '';
             position: absolute;
-            inset: 2px;
+            inset: 3px;
             border-radius: 50%;
-            background: var(--stick-grip);
-            opacity: 0.8;
+            background-image: repeating-radial-gradient(circle at 50% 50%, transparent 0, transparent 3px, rgba(0,0,0,0.4) 4px, rgba(0,0,0,0.4) 5px);
             pointer-events: none;
         }
 
+        /* Thumb Indentation */
         .stick-nipple::after {
             content: '';
             position: absolute;
-            inset: 25%;
+            inset: 22%;
             border-radius: 50%;
-            background: radial-gradient(circle, rgba(0,0,0,0.4) 0%, transparent 70%);
-            box-shadow: inset 0 2px 4px rgba(0,0,0,0.5);
+            background: radial-gradient(circle at 60% 60%, rgba(0,0,0,0.7) 0%, rgba(255,255,255,0.05) 100%);
+            box-shadow: inset 0 4px 10px rgba(0,0,0,0.9);
             pointer-events: none;
         }
 
         .stick-active {
-            box-shadow: 
-                0 20px 30px rgba(0,0,0,0.6),
-                0 0 30px var(--accent-glow),
-                inset 0 4px 6px rgba(255,255,255,0.2);
+            box-shadow: 0 25px 40px rgba(0,0,0,0.9), 0 0 30px var(--accent-glow-soft), inset 0 4px 8px rgba(255,255,255,0.2), 0 0 0 2px #222432, 0 0 0 3px #050508;
         }
 
         /* Triggers / Shoulder Buttons */
         .shoulder-group {
             position: absolute;
-            top: 4vw;
-            width: 160px;
+            width: 150px;
             display: flex;
             flex-direction: column;
             gap: 6px;
@@ -246,7 +326,7 @@
         }
         
         .trigger-btn {
-            height: 44px;
+            height: 42px;
             width: 100%;
             display: flex;
             align-items: center;
@@ -254,25 +334,32 @@
             font-weight: 800;
             letter-spacing: 2px;
             font-size: 0.9rem;
-            color: rgba(255,255,255,0.8);
-            transition: all 0.1s;
+            color: rgba(255,255,255,0.5);
+            background: linear-gradient(180deg, #2a2d3e 0%, #151722 100%);
+            box-shadow: inset 0 2px 2px rgba(255,255,255,0.1), 0 6px 12px rgba(0, 0, 0, 0.7);
+            border: 1px solid rgba(0,0,0,0.9);
         }
         
         .trigger-btn.active {
-            background: rgba(255,255,255,0.15);
+            background: linear-gradient(180deg, #151722 0%, #0a0b10 100%);
             color: white;
-            box-shadow: 0 0 15px var(--accent-glow);
+            box-shadow: inset 0 4px 8px rgba(0,0,0,0.9), 0 0 15px var(--accent-glow-soft);
+            text-shadow: 0 0 8px white;
         }
 
         /* Layout Architecture */
-        .hud-container {
-            width: 100%;
-            height: 100%;
-            position: relative;
-            z-index: 10;
+        .hud-container { width: 100%; height: 100%; position: relative; z-index: 10; }
+
+        #tweak-menu {
+            will-change: transform;
+            transform: translateZ(0);
+            backface-visibility: hidden;
         }
 
-        /* Orientation lock overlay */
+        ::-webkit-scrollbar { height: 4px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.3); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.3); border-radius: 4px; }
+
         @media (orientation: portrait) {
             #rotate-overlay { display: flex; }
             #ui-layer { display: none; }
@@ -281,141 +368,663 @@
 </head>
 <body class="w-screen h-screen">
 
-    <!-- Portrait Block -->
     <div id="rotate-overlay" class="fixed inset-0 z-[100] bg-black hidden flex-col items-center justify-center text-center p-8">
-        <svg class="w-16 h-16 text-white mb-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path>
-        </svg>
+        <svg class="w-16 h-16 text-white mb-6 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
         <h1 class="text-2xl font-bold text-white tracking-wide">Landscape Required</h1>
+    </div>
+
+    <!-- Contextual Customize Menu -->
+    <div id="tweak-menu" class="hidden absolute bottom-6 left-1/2 transform -translate-x-1/2 glass-panel px-6 py-4 rounded-2xl flex items-center gap-6 shadow-[0_20px_50px_rgba(0,0,0,0.9)] z-[100] border border-cyan-500/40 w-max">
+        <div class="flex flex-col border-r border-white/10 pr-6 min-w-[120px]">
+            <span class="text-cyan-400 font-black text-[10px] uppercase tracking-widest mb-1">Tweaking</span>
+            <span id="tweak-title" class="text-white font-bold text-sm truncate">Group</span>
+            <span class="text-white/40 text-[9px] mt-1">(Drag to reposition)</span>
+        </div>
+        <div class="flex flex-col gap-2 w-40">
+            <div class="flex justify-between w-full">
+                <span class="text-white/60 text-[10px] uppercase font-bold tracking-wider">Size Scale</span>
+                <span id="tweak-scale-val" class="text-white font-mono text-[10px]">1.00x</span>
+            </div>
+            <input type="range" id="tweak-scale-slider" min="0.6" max="1.6" step="0.05" value="1">
+        </div>
+        <div id="tweak-gap-container" class="hidden flex-col gap-2 w-40 border-l border-white/10 pl-6">
+            <div class="flex justify-between w-full">
+                <span class="text-white/60 text-[10px] uppercase font-bold tracking-wider">Cluster Spacing</span>
+                <span id="tweak-gap-val" class="text-white font-mono text-[10px]">8px</span>
+            </div>
+            <input type="range" id="tweak-gap-slider" min="0" max="40" step="1" value="8">
+        </div>
+        <button id="tweak-close-btn" class="ml-2 bg-red-500/20 text-red-400 p-2.5 rounded-xl border border-red-500/30 hover:bg-red-500/40 transition-colors shadow-inner">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
     </div>
 
     <!-- Main HUD Layer -->
     <div id="ui-layer" class="hud-container pointer-events-none">
 
-        <!-- Top Settings Bar (Hidden by Default) -->
-        <div id="settings-bar" class="hidden absolute top-4 left-1/2 transform -translate-x-1/2 glass-panel px-4 py-2 rounded-full flex items-center justify-center gap-4 shadow-2xl z-[90] w-fit max-w-[90vw] pointer-events-auto text-xs whitespace-nowrap overflow-x-auto" style="scrollbar-width: none;">
+        <!-- Top Settings Bar -->
+        <div id="settings-bar" class="hidden absolute top-4 left-1/2 transform -translate-x-1/2 glass-panel px-5 py-3 rounded-2xl flex items-center justify-start gap-5 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-[90] w-fit max-w-[95vw] pointer-events-auto text-xs whitespace-nowrap overflow-x-auto border border-white/10">
             
-            <!-- Connection & Edit Mode -->
-            <div class="flex items-center gap-4 shrink-0">
-                <button id="connect-btn" class="bg-blue-500/20 text-blue-400 border border-blue-500/50 px-4 py-1.5 rounded-full hover:bg-blue-500/40 transition font-bold tracking-wide">Connect PC</button>
-                <button id="edit-layout-btn" class="bg-yellow-500/20 text-yellow-400 border border-yellow-500/50 px-3 py-1.5 rounded-full hover:bg-yellow-500/40 transition font-bold">Edit Layout</button>
+            <div class="flex items-center gap-3 shrink-0">
+                <button id="connect-btn" class="bg-blue-500/10 text-blue-400 border border-blue-500/30 px-4 py-2 rounded-xl hover:bg-blue-500/20 transition-all font-bold shadow-inner">Connect PC</button>
             </div>
 
-            <!-- Profile Selection -->
-            <div class="flex items-center gap-2 border-l border-white/10 pl-4 shrink-0">
-                <span class="text-white/50 hidden sm:inline">Profile:</span>
-                <select id="profile-sel" class="bg-black/40 border border-white/10 rounded-md text-white px-2 py-1 outline-none font-bold">
+            <div class="flex items-center gap-3 border-l border-white/10 pl-5 shrink-0">
+                <span class="text-white/40 font-semibold uppercase tracking-wider text-[10px]">Profile</span>
+                <select id="profile-sel" class="bg-black/50 border border-white/10 rounded-lg text-white px-3 py-1.5 outline-none font-bold">
                     <option value="default">Default</option>
                     <option value="racing">Racing</option>
                     <option value="shooter">Shooter</option>
                 </select>
             </div>
 
-            <!-- Tweaks (Size & Sens) -->
-            <div class="flex items-center gap-6 hidden md:flex border-l border-white/10 pl-4 shrink-0">
-                <div class="flex items-center gap-2">
-                    <span class="text-white/50">Size</span>
-                    <input type="range" id="size-slider" min="0.75" max="1.5" step="0.05" value="1">
+            <!-- Master Scaling & Edit Mode -->
+            <div class="flex items-center gap-4 border-l border-white/10 pl-5 shrink-0">
+                <div class="flex flex-col items-center gap-1">
+                    <span class="text-white/40 text-[9px] uppercase font-bold tracking-wider text-purple-400">All Size</span>
+                    <input type="range" id="size-slider" min="0.5" max="1.5" step="0.05" value="1" class="w-24">
                 </div>
-                <div class="flex items-center gap-2">
-                    <span class="text-white/50">Sens</span>
-                    <input type="range" id="sens-slider" min="0.5" max="2" step="0.1" value="1">
-                </div>
+                <button id="edit-layout-btn" class="ml-2 bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 px-4 py-2 rounded-xl hover:bg-cyan-500/20 transition-all font-bold shadow-inner flex items-center gap-2">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                    Custom Size & Pos
+                </button>
+                <button id="reset-layout-btn" class="ml-1 text-white/40 hover:text-white/80 p-2 rounded-xl transition-all" title="Reset Default Layout">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                </button>
             </div>
-
-            <!-- Gyro Steering -->
-            <div class="flex items-center gap-3 border-l border-white/10 pl-4 shrink-0">
-                <label class="flex items-center gap-2 cursor-pointer">
+            
+            <!-- Gyro & Sens -->
+            <div class="flex items-center gap-4 border-l border-white/10 pl-5 pr-2 shrink-0">
+                <div class="flex flex-col items-center gap-1 mr-2">
+                    <span class="text-white/40 text-[9px] uppercase font-bold tracking-wider text-emerald-400">Stick Sens</span>
+                    <input type="range" id="sens-slider" min="0.5" max="2" step="0.1" value="1" class="w-16">
+                </div>
+                <label class="flex items-center gap-3 cursor-pointer group">
                     <input type="checkbox" id="gyro-toggle" class="hidden">
-                    <span class="text-white/50 font-bold">Gyro</span>
-                    <div id="gyro-indicator" class="w-8 h-4 bg-white/10 rounded-full relative transition-colors">
-                        <div class="w-4 h-4 bg-white rounded-full absolute left-0 transition-transform"></div>
+                    <span class="text-white/50 font-bold uppercase tracking-wider text-[10px] group-hover:text-white/80 transition-colors">Gyro</span>
+                    <div id="gyro-indicator" class="w-10 h-5 bg-black/50 border border-white/10 rounded-full relative transition-colors shadow-inner">
+                        <div class="w-5 h-5 bg-white/70 rounded-full absolute left-0 top-[-1px] transition-transform shadow-md"></div>
                     </div>
                 </label>
-                <button id="calibrate-btn" class="hidden bg-emerald-500/20 text-emerald-400 border border-emerald-500/50 px-3 py-1 rounded-full hover:bg-emerald-500/40 transition font-bold active:scale-95">Calibrate</button>
+                <button id="calibrate-btn" class="hidden bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 px-3 py-1.5 rounded-xl hover:bg-emerald-500/20 font-bold active:scale-95">Calibrate</button>
+                <label class="flex items-center gap-2 cursor-pointer ml-2">
+                    <input type="checkbox" id="debug-toggle" class="hidden">
+                    <span class="text-white/40 font-bold uppercase text-[10px]">Debug</span>
+                </label>
             </div>
         </div>
 
-        <!-- Theme & Settings Toggle Bar (Moved back to top) -->
-        <div class="absolute glass-panel px-6 py-2 rounded-full flex items-center justify-center gap-6 shadow-lg z-50 pointer-events-auto" style="top: 8vh; left: 50%; transform: translateX(-50%);">
-            <button onclick="setTheme('xbox')" class="text-sm font-bold tracking-widest text-emerald-400 hover:text-white transition-colors">XBOX</button>
-            <div class="w-px h-4 bg-white/20"></div>
-            <button onclick="setTheme('ps5')" class="text-sm font-bold tracking-widest text-blue-400 hover:text-white transition-colors">PS5</button>
-            <div class="w-px h-4 bg-white/20"></div>
-            <button id="settings-toggle-btn" class="text-white/50 hover:text-white transition-colors" title="Toggle Settings">
-                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
-                </svg>
+        <!-- Debug Display Box -->
+        <div id="debug-box" class="hidden absolute top-24 left-4 glass-panel px-5 py-3 rounded-xl z-80 pointer-events-auto text-xs font-mono border border-white/10 flex flex-col gap-3">
+            <div>
+                <div class="text-red-400 font-bold mb-2 tracking-widest text-[10px] uppercase">Keys Pressed</div>
+                <div id="debug-display" class="text-white/90 min-h-5 min-w-[180px] font-bold text-sm bg-black/40 px-3 py-2 rounded-lg shadow-inner">None</div>
+            </div>
+            <div>
+                <div class="text-cyan-400 font-bold mb-2 tracking-widest text-[10px] uppercase">Axis Data</div>
+                <div class="text-white/70 font-bold text-[11px] bg-black/40 px-3 py-2 rounded-lg shadow-inner grid grid-cols-2 gap-x-4 gap-y-2">
+                    <div>LX: <span id="dbg-lx" class="text-white">0.00</span></div>
+                    <div>LY: <span id="dbg-ly" class="text-white">0.00</span></div>
+                    <div>RX: <span id="dbg-rx" class="text-white">0.00</span></div>
+                    <div>RY: <span id="dbg-ry" class="text-white">0.00</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Theme Bar -->
+        <div class="absolute glass-panel px-8 py-2.5 rounded-full flex items-center justify-center gap-6 z-50 pointer-events-auto" style="top: 6vh; left: 50%; transform: translateX(-50%);">
+            <button onclick="setTheme('xbox')" class="text-xs font-black tracking-[0.2em] text-emerald-400 hover:text-emerald-300 hover:drop-shadow-[0_0_8px_rgba(16,185,129,0.5)] transition-all">XBOX</button>
+            <div class="w-px h-5 bg-white/10"></div>
+            <button onclick="setTheme('ps5')" class="text-xs font-black tracking-[0.2em] text-blue-400 hover:text-blue-300 hover:drop-shadow-[0_0_8px_rgba(59,130,246,0.5)] transition-all">PS5</button>
+            <div class="w-px h-5 bg-white/10"></div>
+            <button id="settings-toggle-btn" class="text-white/40 hover:text-white transition-colors p-1" title="Toggle Settings">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
             </button>
         </div>
 
-        <!-- Middle Control Buttons (Share, Home, Menu) -->
-        <div id="middle-buttons" class="absolute flex items-center justify-between w-[220px] pointer-events-auto z-40 scalable-control" style="left: calc(50% - 110px); top: calc(50% - 32px);">
-            <!-- Share / View -->
-            <button class="w-10 h-10 glass-panel rounded-full flex items-center justify-center active:scale-90 transition-transform shadow-md hover:bg-white/10" data-btn="Share">
-                <svg class="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+        <!-- Draggable Elements -->
+        <div id="middle-buttons" class="absolute flex items-center justify-between w-[220px] pointer-events-auto z-40 scalable-control" style="left: calc(50% - 110px); top: 50vh;" data-name="System Bar" data-scale="--middle-scale">
+            <button class="w-10 h-10 glass-panel rounded-full flex items-center justify-center active:scale-90 transition-transform border border-white/10" data-btn="Share">
+                <svg class="w-4 h-4 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
             </button>
-            
-            <!-- Home / PS / Xbox -->
-            <button class="w-16 h-16 rounded-full glass-panel border border-white/20 flex items-center justify-center shadow-[0_0_20px_rgba(0,0,0,0.4)] active:scale-90 transition-transform hover:bg-white/10" data-btn="Home">
-                <span id="home-icon" class="font-bold text-2xl text-emerald-400">X</span>
+            <button class="w-[60px] h-[60px] rounded-full glass-panel flex items-center justify-center shadow-[0_5px_15px_rgba(0,0,0,0.8)] active:scale-90 transition-transform border-2 border-white/5" data-btn="Home">
+                <span id="home-icon" class="font-black text-2xl text-emerald-400">X</span>
             </button>
-            
-            <!-- Menu / Options -->
-            <button class="w-10 h-10 glass-panel rounded-full flex items-center justify-center active:scale-90 transition-transform shadow-md hover:bg-white/10" data-btn="Menu">
-                <svg class="w-4 h-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
+            <button class="w-10 h-10 glass-panel rounded-full flex items-center justify-center active:scale-90 transition-transform border border-white/10" data-btn="Menu">
+                <svg class="w-4 h-4 text-white/50" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"></path></svg>
             </button>
         </div>
 
-        <!-- Top Shoulders (Made Scalable & Repositionable) -->
-        <div id="shoulder-left" class="shoulder-group pointer-events-auto scalable-control" style="left: 8vw; top: 4vw;">
-            <div class="trigger-btn glass-panel rounded-t-2xl rounded-b-lg h-12" data-btn="L1">L1</div>
-            <div class="trigger-btn glass-panel rounded-b-3xl rounded-t-lg h-16 text-lg" data-btn="L2">L2</div>
+        <div id="shoulder-left" class="shoulder-group pointer-events-auto scalable-control" style="left: 4vw; top: 4vh;" data-name="Left Shoulders" data-scale="--shoulder-scale">
+            <div class="trigger-btn rounded-t-xl rounded-b-[6px]" data-btn="L1">L1</div>
+            <div class="trigger-btn rounded-b-2xl rounded-t-[6px] h-[54px] text-lg shadow-[0_12px_24px_rgba(0,0,0,0.8)]" data-btn="L2">L2</div>
         </div>
         
-        <div id="shoulder-right" class="shoulder-group pointer-events-auto scalable-control" style="right: 8vw; top: 4vw;">
-            <div class="trigger-btn glass-panel rounded-t-2xl rounded-b-lg h-12" data-btn="R1">R1</div>
-            <div class="trigger-btn glass-panel rounded-b-3xl rounded-t-lg h-16 text-lg" data-btn="R2">R2</div>
+        <div id="shoulder-right" class="shoulder-group pointer-events-auto scalable-control" style="right: 4vw; top: 4vh;" data-name="Right Shoulders" data-scale="--shoulder-scale">
+            <div class="trigger-btn rounded-t-xl rounded-b-[6px]" data-btn="R1">R1</div>
+            <div class="trigger-btn rounded-b-2xl rounded-t-[6px] h-[54px] text-lg shadow-[0_12px_24px_rgba(0,0,0,0.8)]" data-btn="R2">R2</div>
         </div>
 
-        <!-- THUMB ARC LAYOUT: LEFT SIDE -->
-        <div id="dpad-grid" class="control-grid pointer-events-auto scalable-control" style="left: 6vw; top: 35vh; width: 210px; height: 210px;">
-            <div class="dpad-base absolute inset-0"></div>
-            <!-- Grid Cells -->
-            <div class="col-start-2 row-start-1 dpad-btn rounded-t-lg" data-btn="Up">
-                <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd"></path></svg>
-            </div>
-            <div class="col-start-1 row-start-2 dpad-btn rounded-l-lg" data-btn="Left">
-                <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg>
-            </div>
-            <div class="col-start-2 row-start-2 dpad-btn rounded-full bg-white/5 backdrop-blur-sm m-2 border border-white/10 shadow-inner" data-btn="L3"></div>
-            <div class="col-start-3 row-start-2 dpad-btn rounded-r-lg" data-btn="Right">
-                <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd"></path></svg>
-            </div>
-            <div class="col-start-2 row-start-3 dpad-btn rounded-b-lg" data-btn="Down">
-                <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg>
-            </div>
-        </div>
-        
-        <div id="base-left" class="stick-housing glass-panel pointer-events-auto scalable-control" style="left: 22vw; top: 60vh;">
+        <!-- Left controls -->
+        <div id="base-left" class="stick-housing pointer-events-auto scalable-control" style="left: 6vw; top: 28vh;" data-name="Left Joystick" data-scale="--joystick-scale">
             <div class="stick-nipple" id="stick-left"></div>
         </div>
 
-        <!-- THUMB ARC LAYOUT: RIGHT SIDE -->
-        <div id="action-grid" class="control-grid pointer-events-auto scalable-control" style="right: 6vw; top: 30vh;">
-            <div class="action-btn glass-panel col-start-2 row-start-1" id="btn-y" data-btn="Y"><span>Y</span></div>
-            <div class="action-btn glass-panel col-start-1 row-start-2" id="btn-x" data-btn="X"><span>X</span></div>
-            <div class="action-btn glass-panel col-start-3 row-start-2" id="btn-b" data-btn="B"><span>B</span></div>
-            <div class="action-btn glass-panel col-start-2 row-start-3" id="btn-a" data-btn="A"><span>A</span></div>
+        <div id="dpad-grid" class="control-grid pointer-events-auto scalable-control" style="left: 20vw; bottom: 12vh;" data-name="D-Pad" data-scale="--dpad-scale" data-gap="--dpad-gap">
+            <div class="dpad-base"></div>
+            <div class="col-start-2 row-start-1 dpad-btn rounded-t-xl" data-btn="Up"><svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M14.707 12.707a1 1 0 01-1.414 0L10 9.414l-3.293 3.293a1 1 0 01-1.414-1.414l4-4a1 1 0 011.414 0l4 4a1 1 0 010 1.414z" clip-rule="evenodd"></path></svg></div>
+            <div class="col-start-1 row-start-2 dpad-btn rounded-l-xl" data-btn="Left"><svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M12.707 5.293a1 1 0 010 1.414L9.414 10l3.293 3.293a1 1 0 01-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clip-rule="evenodd"></path></svg></div>
+            <!-- Perfectly Centered Recessed L3 Button -->
+            <div class="col-start-2 row-start-2 place-self-center w-9 h-9 dpad-btn rounded-full bg-black/50 shadow-[inset_0_4px_8px_rgba(0,0,0,0.8)] border border-white/5 relative z-5" data-btn="L3"></div>
+            <div class="col-start-3 row-start-2 dpad-btn rounded-r-xl" data-btn="Right"><svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1-0 1.414 0z" clip-rule="evenodd"></path></svg></div>
+            <div class="col-start-2 row-start-3 dpad-btn rounded-b-xl" data-btn="Down"><svg class="w-8 h-8" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd"></path></svg></div>
         </div>
 
-        <div id="base-right" class="stick-housing glass-panel pointer-events-auto scalable-control" style="right: 24vw; top: 60vh;">
+        <!-- Right controls -->
+        <div id="action-grid" class="control-grid pointer-events-auto scalable-control" style="right: 6vw; top: 28vh;" data-name="Action Cluster" data-scale="--action-btn-scale" data-gap="--action-gap">
+            <div class="action-btn col-start-2 row-start-1" id="btn-y" data-btn="Y"><span>Y</span></div>
+            <div class="action-btn col-start-1 row-start-2" id="btn-x" data-btn="X"><span>X</span></div>
+            <div class="action-btn col-start-3 row-start-2" id="btn-b" data-btn="B"><span>B</span></div>
+            <div class="action-btn col-start-2 row-start-3" id="btn-a" data-btn="A"><span>A</span></div>
+        </div>
+
+        <div id="base-right" class="stick-housing pointer-events-auto scalable-control" style="right: 20vw; bottom: 12vh;" data-name="Right Joystick" data-scale="--joystick-scale">
             <div class="stick-nipple" id="stick-right"></div>
         </div>
 
     </div>
 
-    <script src="app.js"></script>
+    <!-- ========================================== -->
+    <!-- app.js (Backend WS & Logic Integration)    -->
+    <!-- ========================================== -->
+    <script>
+        // === ULTRA-FAST OPTIMIZATION SUITE ===
+        document.addEventListener('touchmove', e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+        document.addEventListener('wheel', e => { if (e.ctrlKey) e.preventDefault(); }, { passive: false });
+        let lastTouchEnd = 0;
+        document.addEventListener('touchend', e => { const now = Date.now(); if (now - lastTouchEnd <= 300) e.preventDefault(); lastTouchEnd = now; }, false);
+
+        // === DOM Cache (eliminates repeated querySelector calls) ===
+        const domCache = {
+            stickLeft: document.getElementById('stick-left'),
+            stickRight: document.getElementById('stick-right'),
+            baseLeft: document.getElementById('base-left'),
+            baseRight: document.getElementById('base-right'),
+            debugToggle: document.getElementById('debug-toggle'),
+            debugBox: document.getElementById('debug-box'),
+            connectBtn: document.getElementById('connect-btn'),
+            dpadGrid: document.getElementById('dpad-grid'),
+            actionGrid: document.getElementById('action-grid'),
+            customizeBtn: document.getElementById('customize-btn'),
+            customizeModal: document.getElementById('customize-modal'),
+            settingsBar: document.getElementById('settings-bar'),
+            settingsToggleBtn: document.getElementById('settings-toggle-btn'),
+            gyroToggle: document.getElementById('gyro-toggle'),
+            profileSel: document.getElementById('profile-sel'),
+            sizeSlider: document.getElementById('size-slider'),
+            sensSlider: document.getElementById('sens-slider'),
+            debugDisplay: document.getElementById('debug-display'),
+            debugDBGLx: document.getElementById('dbg-lx'),
+            debugDBGLy: document.getElementById('dbg-ly'),
+            debugDBGRx: document.getElementById('dbg-rx'),
+            debugDBGRy: document.getElementById('dbg-ry')
+        };
+
+        // Utility: Debounce/Throttle
+        function throttle(fn, delay) {
+            let lastCall = 0;
+            return function(...args) {
+                const now = Date.now();
+                if (now - lastCall >= delay) {
+                    lastCall = now;
+                    fn.apply(this, args);
+                }
+            };
+        }
+
+        // Core State
+        let ws = null;
+        let isConnected = false;
+        let isEditMode = false;
+        let activeTweakElement = null;
+
+        const BTN_MAP = {
+            'A': 1, 'B': 2, 'X': 4, 'Y': 8,
+            'L1': 16, 'R1': 32, 'L2': 64, 'R2': 128,
+            'Share': 256, 'Menu': 512, 'L3': 1024, 'R3': 2048,
+            'Up': 4096, 'Down': 8192, 'Left': 16384, 'Right': 32768,
+            'Home': 0 
+        };
+
+        let state = {
+            buttons: 0,
+            axes: { lx: 0.0, ly: 0.0, rx: 0.0, ry: 0.0, lt: 0.0, rt: 0.0 }
+        };
+
+        // --- WebSocket Setup ---
+        const connectBtn = document.getElementById('connect-btn');
+        async function initConnection() {
+            if (isConnected) { if (ws) ws.close(); return; }
+            connectBtn.innerText = "Connecting...";
+            try {
+                const res = await fetch('/api/config');
+                const config = await res.json();
+                ws = new WebSocket(`${config.ws_protocol}://${window.location.hostname}:${config.ws_port}`);
+                ws.onopen = () => {
+                    isConnected = true; connectBtn.innerText = "Connected PC";
+                    connectBtn.classList.replace('text-blue-400', 'text-emerald-400');
+                    if(navigator.vibrate) navigator.vibrate([10, 50, 10]);
+                    ws.send('P:' + (document.body.classList.contains('theme-ps5') ? 'ps5' : 'xbox'));
+                };
+                ws.onclose = () => {
+                    isConnected = false; connectBtn.innerText = "Connect PC";
+                    connectBtn.classList.replace('text-emerald-400', 'text-blue-400');
+                };
+            } catch (err) { connectBtn.innerText = "Connect PC"; alert("Failed to connect to backend server.py"); }
+        }
+        connectBtn.addEventListener('click', initConnection);
+
+        // === OPTIMIZED Heartbeat: Only send when state changed, throttled at 50ms ===
+        let lastAxisState = '';
+        const sendAxisThrottled = throttle(() => {
+            if (!ws || ws.readyState !== WebSocket.OPEN) return;
+            // Round to 2 decimal places (compact + prevents floating-point noise triggering unnecessary updates)
+            const axisMsg = `A:${state.axes.lx.toFixed(2)},${state.axes.ly.toFixed(2)},${state.axes.rx.toFixed(2)},${state.axes.ry.toFixed(2)},${state.axes.lt.toFixed(2)},${state.axes.rt.toFixed(2)}`;
+            
+            // Only send if changed
+            if (axisMsg !== lastAxisState) {
+                ws.send(axisMsg);
+                lastAxisState = axisMsg;
+            }
+            
+            // Debug display: only update if debug is ON (avoid DOM thrashing)
+            if (domCache.debugToggle && domCache.debugToggle.checked && domCache.debugDBGLx) {
+                domCache.debugDBGLx.textContent = state.axes.lx.toFixed(2);
+                domCache.debugDBGLy.textContent = state.axes.ly.toFixed(2);
+                domCache.debugDBGRx.textContent = state.axes.rx.toFixed(2);
+                domCache.debugDBGRy.textContent = state.axes.ry.toFixed(2);
+            }
+        }, 50);
+
+        setInterval(sendAxisThrottled, 50);
+
+        // --- Theme Engine ---
+        function setTheme(theme) {
+            const isPs5 = theme === 'ps5';
+            document.body.classList.toggle('theme-ps5', isPs5);
+            const l = {
+                xbox: { a: 'A', b: 'B', x: 'X', y: 'Y', l1: 'LB', l2: 'LT', r1: 'RB', r2: 'RT', home: 'X' },
+                ps5:  { a: '✕', b: '◯', x: '▢', y: '△', l1: 'L1', l2: 'L2', r1: 'R1', r2: 'R2', home: 'PS' }
+            }[theme];
+            ['a', 'b', 'x', 'y'].forEach(key => document.querySelector(`#btn-${key} span`).innerText = l[key]);
+            ['L1', 'L2', 'R1', 'R2'].forEach(key => {
+                const tr = document.querySelector(`[data-btn="${key}"]`);
+                if(tr) tr.innerText = l[key.toLowerCase()];
+            });
+            const home = document.getElementById('home-icon');
+            home.innerText = l.home;
+            home.className = isPs5 ? 'font-black text-2xl text-blue-400 drop-shadow-[0_0_10px_rgba(59,130,246,0.6)]' : 'font-black text-3xl text-emerald-400 drop-shadow-[0_0_10px_rgba(16,185,129,0.4)]';
+            if (ws && ws.readyState === WebSocket.OPEN) ws.send(`P:${theme}`);
+        }
+
+        // --- Button Inputs ---
+        function updateButton(btnName, isPressed) {
+            const flag = BTN_MAP[btnName] || 0;
+            if (flag === 0) return;
+            if (isPressed) state.buttons |= flag;
+            else state.buttons &= ~flag;
+            if (ws && ws.readyState === WebSocket.OPEN) ws.send(`B:${state.buttons}`);
+            
+            const debugToggle = document.getElementById('debug-toggle');
+            if (debugToggle && debugToggle.checked) {
+                const d = document.getElementById('debug-display');
+                const p = Object.entries(BTN_MAP).filter(([_, m]) => m > 0 && (state.buttons & m)).map(([n]) => n);
+                d.textContent = p.length ? p.join(' | ') : 'None';
+            }
+        }
+
+        document.querySelectorAll('[data-btn]').forEach(btn => {
+            const btnName = btn.getAttribute('data-btn');
+            const press = (e) => {
+                if (isEditMode) return;
+                e.preventDefault();
+                if (!btn.classList.contains('active')) {
+                    btn.classList.add('active');
+                    if (navigator.vibrate) navigator.vibrate(12);
+                    updateButton(btnName, true);
+                }
+            };
+            const release = (e) => {
+                if (isEditMode) return;
+                e.preventDefault();
+                if (btn.classList.contains('active')) {
+                    btn.classList.remove('active');
+                    updateButton(btnName, false);
+                }
+            };
+            btn.addEventListener('pointerdown', e => { btn.setPointerCapture(e.pointerId); press(e); });
+            btn.addEventListener('pointerup', release);
+            btn.addEventListener('pointercancel', release);
+            btn.addEventListener('pointerleave', release);
+        });
+
+        // --- Settings & Toggles (Cached) ---
+        domCache.settingsToggleBtn.addEventListener('click', e => {
+            e.stopPropagation(); domCache.settingsBar.classList.toggle('hidden');
+        }, { passive: true });
+        document.addEventListener('click', e => {
+            if (!domCache.settingsBar.classList.contains('hidden') && !domCache.settingsBar.contains(e.target) && e.target !== domCache.settingsToggleBtn) {
+                domCache.settingsBar.classList.add('hidden');
+            }
+        }, { passive: true });
+
+        // === OPTIMIZED Debug Toggle ===
+        domCache.debugToggle.addEventListener('change', e => {
+            const indicator = document.getElementById('debug-indicator');
+            if (e.target.checked) {
+                indicator.classList.add('bg-red-500');
+                indicator.children[0].classList.add('translate-x-5');
+                domCache.debugBox.classList.remove('hidden');
+                if(ws && ws.readyState === WebSocket.OPEN) ws.send('D:1');
+            } else {
+                indicator.classList.remove('bg-red-500');
+                indicator.children[0].classList.remove('translate-x-5');
+                domCache.debugBox.classList.add('hidden');
+                if(ws && ws.readyState === WebSocket.OPEN) ws.send('D:0');
+            }
+        }, { passive: true });
+
+        // --- Contextual Layout Customize Engine ---
+        const editBtn = document.getElementById('edit-layout-btn');
+        const draggables = document.querySelectorAll('.scalable-control');
+        const tweakMenu = document.getElementById('tweak-menu');
+
+        function clearEditSelection() {
+            activeTweakElement = null;
+            draggables.forEach(el => el.classList.remove('edit-mode-selected'));
+            tweakMenu.classList.add('hidden');
+        }
+
+        editBtn.addEventListener('click', () => {
+            isEditMode = !isEditMode;
+            editBtn.innerHTML = isEditMode ? 'Done Customizing' : '<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg> Custom Size & Pos';
+            editBtn.classList.toggle('bg-cyan-500/10', !isEditMode);
+            editBtn.classList.toggle('bg-rose-500/20', isEditMode);
+            editBtn.classList.toggle('text-cyan-400', !isEditMode);
+            editBtn.classList.toggle('text-white', isEditMode);
+            
+            if(!isEditMode) clearEditSelection();
+            
+            draggables.forEach(el => {
+                if(isEditMode) el.classList.add('edit-mode-idle');
+                else el.classList.remove('edit-mode-idle', 'edit-mode-selected');
+            });
+        });
+
+        document.getElementById('tweak-close-btn').addEventListener('click', clearEditSelection);
+
+        // Active Slider Binding
+        document.getElementById('tweak-scale-slider').addEventListener('input', e => {
+            if(activeTweakElement) {
+                document.documentElement.style.setProperty(activeTweakElement.dataset.scale, e.target.value);
+                document.getElementById('tweak-scale-val').innerText = parseFloat(e.target.value).toFixed(2) + 'x';
+            }
+        });
+        document.getElementById('tweak-gap-slider').addEventListener('input', e => {
+            if(activeTweakElement && activeTweakElement.dataset.gap) {
+                document.documentElement.style.setProperty(activeTweakElement.dataset.gap, e.target.value + 'px');
+                document.getElementById('tweak-gap-val').innerText = e.target.value + 'px';
+            }
+        });
+
+        draggables.forEach(el => {
+            let startX, startY, initialLeft, initialTop;
+            
+            const startDrag = (e) => {
+                if (!isEditMode) return;
+                e.preventDefault(); e.stopPropagation();
+                
+                clearEditSelection();
+                activeTweakElement = el;
+                el.classList.add('edit-mode-selected');
+                
+                // Populate Menu
+                document.getElementById('tweak-title').innerText = el.dataset.name;
+                const currentScale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(el.dataset.scale)) || 1;
+                document.getElementById('tweak-scale-slider').value = currentScale;
+                document.getElementById('tweak-scale-val').innerText = currentScale.toFixed(2) + 'x';
+                
+                const gapContainer = document.getElementById('tweak-gap-container');
+                if (el.dataset.gap) {
+                    gapContainer.classList.replace('hidden', 'flex');
+                    const currentGap = parseInt(getComputedStyle(document.documentElement).getPropertyValue(el.dataset.gap)) || 8;
+                    document.getElementById('tweak-gap-slider').value = currentGap;
+                    document.getElementById('tweak-gap-val').innerText = currentGap + 'px';
+                } else {
+                    gapContainer.classList.replace('flex', 'hidden');
+                }
+                tweakMenu.classList.remove('hidden');
+
+                startX = e.touches ? e.touches[0].clientX : e.clientX;
+                startY = e.touches ? e.touches[0].clientY : e.clientY;
+                
+                const computed = window.getComputedStyle(el);
+                initialLeft = parseFloat(computed.left) || el.offsetLeft;
+                initialTop = parseFloat(computed.top) || el.offsetTop;
+                
+                el.style.right = 'auto'; el.style.bottom = 'auto';
+                el.style.left = `${initialLeft}px`; el.style.top = `${initialTop}px`;
+                
+                document.addEventListener('mousemove', moveDrag);
+                document.addEventListener('mouseup', endDrag);
+                document.addEventListener('touchmove', moveDrag, {passive: false});
+                document.addEventListener('touchend', endDrag);
+            };
+
+            let lastValidLeft, lastValidTop;
+
+            const moveDrag = (e) => {
+                if (!isEditMode) return;
+                e.preventDefault();
+                const currentX = e.touches ? e.touches[0].clientX : e.clientX;
+                const currentY = e.touches ? e.touches[0].clientY : e.clientY;
+                
+                const masterScale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--master-scale')) || 1;
+                const itemScale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(el.dataset.scale)) || 1;
+                const effectiveScale = masterScale * itemScale;
+                
+                const proposedLeft = initialLeft + (currentX - startX) / effectiveScale;
+                const proposedTop = initialTop + (currentY - startY) / effectiveScale;
+                
+                el.style.left = `${proposedLeft}px`;
+                el.style.top = `${proposedTop}px`;
+                
+                const rect = el.getBoundingClientRect();
+                let collision = false;
+                
+                draggables.forEach(other => {
+                    if (other !== el) {
+                        const oRect = other.getBoundingClientRect();
+                        if (rect.left < oRect.right - 10 && rect.right > oRect.left + 10 && 
+                            rect.top < oRect.bottom - 10 && rect.bottom > oRect.top + 10) {
+                            collision = true;
+                        }
+                    }
+                });
+
+                if (collision) {
+                    el.style.left = `${lastValidLeft}px`;
+                    el.style.top = `${lastValidTop}px`;
+                } else {
+                    lastValidLeft = proposedLeft;
+                    lastValidTop = proposedTop;
+                }
+            };
+
+            const endDrag = () => {
+                document.removeEventListener('mousemove', moveDrag); document.removeEventListener('mouseup', endDrag);
+                document.removeEventListener('touchmove', moveDrag); document.removeEventListener('touchend', endDrag);
+            };
+
+            el.addEventListener('mousedown', startDrag);
+            el.addEventListener('touchstart', startDrag, {passive: false});
+        });
+
+        // --- Master Settings & Defaults ---
+        let globalSens = 1;
+        let currentRawBeta = 0; let currentRawGamma = 0;
+        let calibBeta = 0; let calibGamma = 0;
+        let gyroActive = false;
+
+        document.getElementById('size-slider').addEventListener('input', e => document.documentElement.style.setProperty('--master-scale', e.target.value));
+        document.getElementById('sens-slider').addEventListener('input', e => globalSens = parseFloat(e.target.value));
+
+        const defaultPositions = {
+            'shoulder-left': 'left: 4vw; top: 4vh;',
+            'shoulder-right': 'right: 4vw; top: 4vh;',
+            'dpad-grid': 'left: 6vw; top: 28vh;',
+            'base-left': 'left: 20vw; bottom: 12vh;',
+            'middle-buttons': 'left: calc(50% - 110px); top: 30vh;',
+            'action-grid': 'right: 6vw; top: 28vh;',
+            'base-right': 'right: 20vw; bottom: 12vh;'
+        };
+
+        document.getElementById('reset-layout-btn').addEventListener('click', () => {
+            document.getElementById('size-slider').value = 1; document.documentElement.style.setProperty('--master-scale', 1);
+            document.documentElement.style.setProperty('--action-btn-scale', 1);
+            document.documentElement.style.setProperty('--dpad-scale', 1);
+            document.documentElement.style.setProperty('--trigger-scale', 1);
+            document.documentElement.style.setProperty('--shoulder-scale', 1);
+            document.documentElement.style.setProperty('--joystick-scale', 1);
+            document.documentElement.style.setProperty('--middle-scale', 1);
+            document.documentElement.style.setProperty('--action-gap', '8px');
+            document.documentElement.style.setProperty('--dpad-gap', '6px');
+            
+            Object.entries(defaultPositions).forEach(([id, styles]) => {
+                const element = document.getElementById(id);
+                if (element) element.setAttribute('style', styles);
+            });
+            if(navigator.vibrate) navigator.vibrate([20, 10, 20]);
+        });
+
+        // --- Gyroscope ---
+        const gyroToggle = document.getElementById('gyro-toggle');
+        const calibrateBtn = document.getElementById('calibrate-btn');
+        function handleGyro(e) {
+            currentRawBeta = e.beta || 0; currentRawGamma = e.gamma || 0;
+            if(!gyroActive) return;
+            const maxTilt = 35;
+            let normX = Math.max(-1, Math.min(1, (currentRawGamma - calibGamma) / maxTilt));
+            let normY = Math.max(-1, Math.min(1, (currentRawBeta - calibBeta) / maxTilt));
+            simulateStick('stick-left', normX, normY);
+        }
+        function simulateStick(stickId, normX, normY) {
+            const stick = document.getElementById(stickId);
+            const maxRadius = 45;
+            const DEADZONE = 0.05; // Ignore movements < 5% to reduce tiny updates
+            
+            let dx = Math.max(-maxRadius, Math.min(maxRadius, normX * maxRadius * globalSens));
+            let dy = Math.max(-maxRadius, Math.min(maxRadius, normY * maxRadius * globalSens));
+
+            // Apply deadzone: values < deadzone become 0
+            const normalizedX = Math.abs(dx / maxRadius) < DEADZONE ? 0 : (dx / maxRadius);
+            const normalizedY = Math.abs(dy / maxRadius) < DEADZONE ? 0 : (dy / maxRadius);
+
+            if(stickId === 'stick-left') {
+                state.axes.lx = normalizedX;
+                state.axes.ly = document.body.classList.contains('theme-ps5') ? normalizedY : -normalizedY;
+            } else {
+                state.axes.rx = normalizedX;
+                state.axes.ry = -normalizedY;
+            }
+            stick.style.transition = 'none';
+            stick.style.transform = `translate(${dx}px, ${dy}px) rotateX(${(dy/maxRadius)*20}deg) rotateY(${-(dx/maxRadius)*20}deg)`;
+            stick.classList.add('stick-active');
+        }
+        gyroToggle.addEventListener('change', async (e) => {
+            if (e.target.checked) {
+                if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                    try {
+                        if (await DeviceOrientationEvent.requestPermission() === 'granted') enableGyro(); else e.target.checked = false;
+                    } catch (err) { enableGyro(); } 
+                } else enableGyro();
+            } else disableGyro();
+        });
+        function enableGyro() {
+            gyroActive = true; calibrateBtn.classList.remove('hidden');
+            document.getElementById('gyro-indicator').children[0].classList.add('translate-x-5');
+            window.addEventListener('deviceorientation', handleGyro);
+        }
+        function disableGyro() {
+            gyroActive = false; calibrateBtn.classList.add('hidden');
+            document.getElementById('gyro-indicator').children[0].classList.remove('translate-x-5');
+            window.removeEventListener('deviceorientation', handleGyro);
+            state.axes.lx = 0; state.axes.ly = 0;
+            const stick = document.getElementById('stick-left');
+            stick.classList.remove('stick-active');
+            stick.style.transition = 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)';
+            stick.style.transform = `translate(0px, 0px) rotateX(0deg) rotateY(0deg)`;
+        }
+        calibrateBtn.addEventListener('click', () => { calibBeta = currentRawBeta; calibGamma = currentRawGamma; if(navigator.vibrate) navigator.vibrate(20); });
+
+        // --- Touch Engine for Joysticks (OPTIMIZED with RAF batching) ---
+        function initJoystick(baseId, stickId) {
+            const base = document.getElementById(baseId);
+            const stick = document.getElementById(stickId);
+            let isActive = false; let touchId = null;
+            let pendingX = 0, pendingY = 0, hasPending = false;
+            let rafId = null;
+
+            const processPending = () => {
+                if (hasPending) {
+                    if (gyroActive && stickId === 'stick-left') return;
+                    const rect = base.getBoundingClientRect();
+                    const masterScale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--master-scale')) || 1;
+                    const itemScale = parseFloat(getComputedStyle(document.documentElement).getPropertyValue(base.dataset.scale)) || 1;
+                    const effectiveScale = masterScale * itemScale;
+                    simulateStick(stickId, ((pendingX - (rect.left + rect.width/2)) / effectiveScale) / 45, ((pendingY - (rect.top + rect.height/2)) / effectiveScale) / 45);
+                    hasPending = false;
+                }
+            };
+
+            const scheduleUpdate = (cX, cY) => {
+                pendingX = cX;
+                pendingY = cY;
+                hasPending = true;
+                if (!rafId) rafId = requestAnimationFrame(() => { processPending(); rafId = null; });
+            };
+
+            const resetPos = () => {
+                isActive = false; touchId = null;
+                if (rafId) { cancelAnimationFrame(rafId); rafId = null; }
+                if (stickId === 'stick-left') { state.axes.lx = 0; state.axes.ly = 0; } else { state.axes.rx = 0; state.axes.ry = 0; }
+                stick.classList.remove('stick-active');
+                stick.style.transition = 'transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1)';
+                stick.style.transform = `translate(0px, 0px) rotateX(0deg) rotateY(0deg)`;
+            };
+            base.addEventListener('touchstart', e => {
+                if (isEditMode || isActive) return; e.preventDefault();
+                touchId = e.changedTouches[0].identifier; isActive = true; stick.classList.add('stick-active');
+                if(navigator.vibrate) navigator.vibrate(8);
+                scheduleUpdate(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+            }, {passive: false});
+            window.addEventListener('touchmove', e => {
+                if (!isActive || isEditMode) return;
+                for (let i=0; i<e.changedTouches.length; i++) {
+                    if (e.changedTouches[i].identifier === touchId) { e.preventDefault(); scheduleUpdate(e.changedTouches[i].clientX, e.changedTouches[i].clientY); break; }
+                }
+            }, {passive: false});
+            window.addEventListener('touchend', e => {
+                if (!isActive || isEditMode) return;
+                for (let i=0; i<e.changedTouches.length; i++) { if (e.changedTouches[i].identifier === touchId) { resetPos(); break; } }
+            });
+            window.addEventListener('touchcancel', resetPos);
+            base.addEventListener('mousedown', e => { if (isEditMode) return; isActive = true; stick.classList.add('stick-active'); scheduleUpdate(e.clientX, e.clientY); });
+            window.addEventListener('mousemove', e => { if(isActive && !isEditMode) scheduleUpdate(e.clientX, e.clientY); });
+            window.addEventListener('mouseup', resetPos);
+        }
+        initJoystick('base-left', 'stick-left'); initJoystick('base-right', 'stick-right');
+        window.oncontextmenu = e => { e.preventDefault(); return false; };
+    </script>
 </body>
 </html>
